@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Squeeze — compress images to a target size</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#12151C;
+    --ink-soft:#1B1F29;
+    --paper:#F1EFE9;
+    --paper-dim:#E4E1D8;
+    --line: rgba(241,239,233,0.12);
+    --line-strong: rgba(241,239,233,0.22);
+    --amber:#F5A623;
+    --amber-dim: rgba(245,166,35,0.16);
+    --teal:#4E9C82;
+    --teal-dim: rgba(78,156,130,0.16);
+    --clay:#D96C56;
+    --clay-dim: rgba(217,108,86,0.16);
+    --text-dim: rgba(241,239,233,0.58);
+    --text-faint: rgba(241,239,233,0.38);
+    --radius: 14px;
+    --display: 'Space Grotesk', sans-serif;
+    --body: 'Inter', sans-serif;
+    --mono: 'IBM Plex Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--ink);
+    color: var(--paper);
+    font-family: var(--body);
+    -webkit-font-smoothing: antialiased;
+    min-height:100vh;
+  }
+  ::selection{ background: var(--amber); color: var(--ink); }
+
+  a{color:inherit;}
+
+  .noise{
+    position:fixed; inset:0; pointer-events:none; z-index:0; opacity:0.035;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .wrap{
+    position:relative; z-index:1;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 56px 24px 96px;
+  }
+
+  header.top{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom: 52px;
+  }
+  .brand{
+    display:flex; align-items:center; gap:10px;
+    font-family: var(--display);
+    font-weight:700;
+    font-size: 19px;
+    letter-spacing: -0.01em;
+  }
+  .brand .mark{
+    width:26px; height:26px; border-radius:7px;
+    background: linear-gradient(135deg, var(--amber), #d98a1a);
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .brand .mark svg{ width:14px; height:14px; }
+  .brand-sub{
+    font-family: var(--mono);
+    font-size:11px;
+    color: var(--text-faint);
+    letter-spacing: 0.04em;
+    margin-left: 4px;
+    padding-left:10px;
+    border-left: 1px solid var(--line-strong);
+  }
+
+  .hero{
+    margin-bottom: 44px;
+  }
+  .eyebrow{
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--amber);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .eyebrow::before{
+    content:'';
+    width:6px; height:6px; border-radius:50%;
+    background: var(--amber);
+    box-shadow: 0 0 0 3px var(--amber-dim);
+  }
+  h1{
+    font-family: var(--display);
+    font-size: clamp(32px, 5vw, 46px);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 0 0 14px;
+    font-weight: 700;
+  }
+  h1 em{
+    font-style: normal;
+    color: var(--amber);
+  }
+  .hero p{
+    font-size: 16px;
+    line-height:1.55;
+    color: var(--text-dim);
+    max-width: 52ch;
+    margin:0;
+  }
+
+  /* ---- Card shell ---- */
+  .card{
+    background: var(--ink-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 28px;
+  }
+  .card + .card{ margin-top: 20px; }
+
+  /* ---- Dropzone ---- */
+  .dropzone{
+    border: 1.5px dashed var(--line-strong);
+    border-radius: 12px;
+    padding: 48px 24px;
+    text-align:center;
+    cursor:pointer;
+    transition: border-color .18s ease, background .18s ease;
+    position:relative;
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color: var(--amber);
+    background: var(--amber-dim);
+  }
+  .dropzone.has-image{
+    padding: 20px;
+    cursor:default;
+  }
+  .dz-icon{
+    width:44px; height:44px;
+    margin: 0 auto 18px;
+    border-radius:10px;
+    background: var(--amber-dim);
+    display:flex; align-items:center; justify-content:center;
+    color: var(--amber);
+  }
+  .dz-icon svg{ width:22px; height:22px; }
+  .dz-title{
+    font-family: var(--display);
+    font-weight:600;
+    font-size:17px;
+    margin-bottom:6px;
+  }
+  .dz-sub{
+    font-size:13.5px;
+    color: var(--text-faint);
+    margin-bottom: 22px;
+  }
+  .btn{
+    font-family: var(--body);
+    font-weight:600;
+    font-size: 14px;
+    border-radius: 9px;
+    border: none;
+    padding: 12px 22px;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    transition: transform .12s ease, filter .12s ease, background .12s ease, opacity .12s ease;
+  }
+  .btn:active{ transform: scale(0.97); }
+  .btn-primary{
+    background: var(--amber);
+    color: var(--ink);
+  }
+  .btn-primary:hover{ filter: brightness(1.08); }
+  .btn-primary:disabled{
+    opacity:0.4; cursor:not-allowed; filter:none;
+  }
+  .btn-ghost{
+    background: transparent;
+    color: var(--paper);
+    border: 1px solid var(--line-strong);
+  }
+  .btn-ghost:hover{ border-color: var(--amber); color: var(--amber); }
+  .btn-block{ width:100%; justify-content:center; padding:14px; font-size:15px; }
+
+  input[type=file]{ display:none; }
+
+  .preview-row{
+    display:flex; align-items:center; gap:16px;
+    text-align:left;
+  }
+  .preview-thumb{
+    width:76px; height:76px; border-radius:9px;
+    object-fit:cover;
+    flex-shrink:0;
+    border:1px solid var(--line-strong);
+    background: var(--ink);
+  }
+  .preview-meta{ flex:1; min-width:0; }
+  .preview-name{
+    font-weight:600; font-size:14.5px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    margin-bottom:4px;
+  }
+  .preview-info{
+    font-family: var(--mono);
+    font-size:12.5px;
+    color: var(--text-faint);
+  }
+  .preview-clear{
+    background:none; border:none; color: var(--text-faint);
+    cursor:pointer; padding:8px; border-radius:8px; flex-shrink:0;
+    transition: color .15s ease, background .15s ease;
+  }
+  .preview-clear:hover{ color: var(--clay); background: var(--clay-dim); }
+  .preview-clear svg{ width:18px; height:18px; display:block; }
+
+  /* ---- Target size ---- */
+  .section-label{
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color: var(--text-faint);
+    margin-bottom: 14px;
+  }
+  .target-row{
+    display:flex; gap:10px;
+  }
+  .target-input{
+    flex:1;
+    background: var(--ink);
+    border: 1px solid var(--line-strong);
+    border-radius: 9px;
+    padding: 0 16px;
+    height:52px;
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight:500;
+    color: var(--paper);
+    outline:none;
+    transition: border-color .15s ease;
+    width: 100%;
+  }
+  .target-input:focus{ border-color: var(--amber); }
+  .target-input::-webkit-outer-spin-button,
+  .target-input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  .target-input[type=number]{ -moz-appearance:textfield; }
+
+  .unit-toggle{
+    display:flex;
+    background: var(--ink);
+    border: 1px solid var(--line-strong);
+    border-radius: 9px;
+    padding: 4px;
+    height:52px;
+    flex-shrink:0;
+  }
+  .unit-btn{
+    font-family: var(--mono);
+    font-weight:600;
+    font-size:13px;
+    background:none;
+    border:none;
+    color: var(--text-faint);
+    padding: 0 18px;
+    border-radius:6px;
+    cursor:pointer;
+    transition: background .15s ease, color .15s ease;
+  }
+  .unit-btn.active{
+    background: var(--amber);
+    color: var(--ink);
+  }
+
+  .presets{
+    display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;
+  }
+  .preset-chip{
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--ink);
+    border: 1px solid var(--line-strong);
+    color: var(--text-dim);
+    padding: 7px 13px;
+    border-radius: 20px;
+    cursor:pointer;
+    transition: border-color .15s ease, color .15s ease;
+  }
+  .preset-chip:hover, .preset-chip.active{
+    border-color: var(--amber);
+    color: var(--amber);
+  }
+
+  /* ---- Compress action ---- */
+  .compress-block{ margin-top: 22px; }
+
+  /* ---- Gauge (signature element) ---- */
+  .gauge-wrap{
+    margin-top: 20px;
+    display:none;
+  }
+  .gauge-wrap.show{ display:block; }
+  .gauge-labels{
+    display:flex; justify-content:space-between;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-faint);
+    margin-bottom:8px;
+  }
+  .gauge-labels .now{ color: var(--paper); font-weight:500; }
+  .gauge-track{
+    position:relative;
+    height: 10px;
+    background: var(--ink);
+    border-radius: 6px;
+    overflow:hidden;
+    border: 1px solid var(--line-strong);
+  }
+  .gauge-fill{
+    position:absolute; left:0; top:0; bottom:0;
+    width:0%;
+    background: linear-gradient(90deg, var(--amber), #d98a1a);
+    border-radius: 6px;
+    transition: width .35s cubic-bezier(.4,0,.2,1), background .3s ease;
+  }
+  .gauge-fill.ok{ background: linear-gradient(90deg, var(--teal), #3f8570); }
+  .gauge-target-line{
+    position:absolute; top:-3px; bottom:-3px;
+    width:2px;
+    background: var(--paper);
+    left: 100%;
+  }
+  .gauge-status{
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text-faint);
+    margin-top:10px;
+    min-height:16px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .spinner{
+    width:12px; height:12px;
+    border-radius:50%;
+    border: 2px solid var(--line-strong);
+    border-top-color: var(--amber);
+    animation: spin 0.7s linear infinite;
+    flex-shrink:0;
+  }
+  @keyframes spin{ to{ transform: rotate(360deg); } }
+
+  .warn-banner{
+    display:none;
+    margin-top:16px;
+    background: var(--clay-dim);
+    border: 1px solid rgba(217,108,86,0.4);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13.5px;
+    line-height:1.5;
+    color: var(--paper);
+  }
+  .warn-banner.show{ display:flex; gap:10px; align-items:flex-start; }
+  .warn-banner svg{ width:18px; height:18px; flex-shrink:0; margin-top:1px; color: var(--clay); }
+
+  /* ---- Results ---- */
+  .results{
+    display:none;
+    margin-top: 20px;
+  }
+  .results.show{ display:block; }
+
+  .result-summary{
+    display:flex; align-items:center; gap:8px;
+    font-family: var(--display);
+    font-weight:600;
+    font-size:18px;
+    margin-bottom:22px;
+  }
+  .check-badge{
+    width:24px; height:24px; border-radius:50%;
+    background: var(--teal);
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .check-badge svg{ width:13px; height:13px; color: var(--ink); }
+  .result-summary .pct{ color: var(--teal); }
+
+  .compare-grid{
+    display:grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    margin-bottom: 22px;
+  }
+  @media (max-width: 560px){ .compare-grid{ grid-template-columns: 1fr; } }
+
+  .compare-panel{
+    background: var(--ink);
+    border: 1px solid var(--line-strong);
+    border-radius: 11px;
+    overflow:hidden;
+  }
+  .compare-panel .img-holder{
+    aspect-ratio: 4/3;
+    background:
+      linear-gradient(45deg, #20242e 25%, transparent 25%),
+      linear-gradient(-45deg, #20242e 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #20242e 75%),
+      linear-gradient(-45deg, transparent 75%, #20242e 75%);
+    background-size: 16px 16px;
+    background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .compare-panel img{
+    width:100%; height:100%; object-fit:contain;
+    display:block;
+  }
+  .compare-panel .panel-foot{
+    padding: 14px 16px;
+    border-top: 1px solid var(--line);
+  }
+  .panel-tag{
+    font-family: var(--mono);
+    font-size:10.5px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color: var(--text-faint);
+    margin-bottom:6px;
+  }
+  .panel-tag.tag-compressed{ color: var(--teal); }
+  .panel-size{
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight:600;
+  }
+  .panel-dims{
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-faint);
+    margin-top:3px;
+  }
+
+  .stat-strip{
+    display:grid; grid-template-columns: repeat(3,1fr);
+    gap:1px;
+    background: var(--line-strong);
+    border: 1px solid var(--line-strong);
+    border-radius: 11px;
+    overflow:hidden;
+    margin-bottom: 22px;
+  }
+  .stat-cell{
+    background: var(--ink);
+    padding: 16px 14px;
+    text-align:center;
+  }
+  .stat-cell .stat-val{
+    font-family: var(--mono);
+    font-size: 19px;
+    font-weight:600;
+    color: var(--amber);
+  }
+  .stat-cell .stat-lbl{
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing:0.05em;
+    text-transform:uppercase;
+    color: var(--text-faint);
+    margin-top:4px;
+  }
+
+  .result-actions{
+    display:flex; gap:10px;
+  }
+  .result-actions .btn-primary{ flex:1; }
+
+  footer{
+    text-align:center;
+    margin-top: 48px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--text-faint);
+    letter-spacing:0.02em;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .gauge-fill, .spinner, .btn{ transition:none; animation:none; }
+  }
+
+  @media (max-width: 600px){
+    .wrap{ padding: 36px 16px 64px; }
+    .card{ padding: 20px; }
+    .target-row{ flex-direction:column; }
+    .unit-toggle{ width:100%; }
+  }
+</style>
+</head>
+<body>
+<div class="noise"></div>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <span class="mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 12 L10 6 M4 12 L10 18 M20 12 L14 6 M20 12 L14 18" stroke="#12151C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      Squeeze
+      <span class="brand-sub">IMAGE → TARGET BYTES</span>
+    </div>
+  </header>
+
+  <div class="hero">
+    <div class="eyebrow">Client-side · nothing uploaded</div>
+    <h1>Hit an exact file size, <em>without the guesswork.</em></h1>
+    <p>Drop in an image, set a byte budget, and Squeeze iterates on quality — and dimensions if it must — until your file lands at or under the limit.</p>
+  </div>
+
+  <!-- Upload card -->
+  <div class="card">
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+      <div id="dzEmpty">
+        <div class="dz-icon">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4M12 4L7 9M12 4l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="dz-title">Drag an image here</div>
+        <div class="dz-sub">or choose a file — JPG, PNG, WebP</div>
+        <button class="btn btn-primary" id="chooseBtn" type="button">Choose Image</button>
+      </div>
+      <div id="dzFilled" style="display:none;">
+        <div class="preview-row">
+          <img id="thumbImg" class="preview-thumb" alt="Selected image preview">
+          <div class="preview-meta">
+            <div class="preview-name" id="fileName">—</div>
+            <div class="preview-info" id="fileInfo">—</div>
+          </div>
+          <button class="preview-clear" id="clearBtn" type="button" title="Remove image" aria-label="Remove image">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Target size card -->
+  <div class="card">
+    <div class="section-label">Maximum File Size</div>
+    <div class="target-row">
+      <input type="number" class="target-input" id="targetValue" value="500" min="1" step="1" inputmode="numeric">
+      <div class="unit-toggle">
+        <button class="unit-btn active" data-unit="KB" type="button">KB</button>
+        <button class="unit-btn" data-unit="MB" type="button">MB</button>
+      </div>
+    </div>
+    <div class="presets">
+      <button class="preset-chip" data-val="100" data-unit="KB" type="button">100 KB</button>
+      <button class="preset-chip active" data-val="500" data-unit="KB" type="button">500 KB</button>
+      <button class="preset-chip" data-val="1" data-unit="MB" type="button">1 MB</button>
+      <button class="preset-chip" data-val="2" data-unit="MB" type="button">2 MB</button>
+      <button class="preset-chip" data-val="5" data-unit="MB" type="button">5 MB</button>
+    </div>
+
+    <div class="compress-block">
+      <button class="btn btn-primary btn-block" id="compressBtn" disabled type="button">Compress Image</button>
+
+      <div class="gauge-wrap" id="gaugeWrap">
+        <div class="gauge-labels">
+          <span>0 KB</span>
+          <span class="now" id="gaugeNow">— KB</span>
+        </div>
+        <div class="gauge-track">
+          <div class="gauge-fill" id="gaugeFill"></div>
+          <div class="gauge-target-line" id="gaugeTargetLine"></div>
+        </div>
+        <div class="gauge-status" id="gaugeStatus"></div>
+      </div>
+
+      <div class="warn-banner" id="warnBanner">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="warnText"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="card results" id="resultsCard">
+    <div class="result-summary">
+      <span class="check-badge"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      Compressed — <span class="pct" id="reductionPct">0%</span> smaller
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-panel">
+        <div class="img-holder"><img id="origImg" alt="Original image"></div>
+        <div class="panel-foot">
+          <div class="panel-tag">Original</div>
+          <div class="panel-size" id="origSize">—</div>
+          <div class="panel-dims" id="origDims">—</div>
+        </div>
+      </div>
+      <div class="compare-panel">
+        <div class="img-holder"><img id="compImg" alt="Compressed image"></div>
+        <div class="panel-foot">
+          <div class="panel-tag tag-compressed">Compressed</div>
+          <div class="panel-size" id="compSize">—</div>
+          <div class="panel-dims" id="compDims">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stat-strip">
+      <div class="stat-cell">
+        <div class="stat-val" id="statReduction">0%</div>
+        <div class="stat-lbl">Reduction</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-val" id="statQuality">—</div>
+        <div class="stat-lbl">Quality used</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-val" id="statScale">—</div>
+        <div class="stat-lbl">Scale</div>
+      </div>
+    </div>
+
+    <div class="result-actions">
+      <button class="btn btn-primary" id="downloadBtn" type="button">
+        <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 4v12M12 16l-4-4M12 16l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 18v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Download Compressed Image
+      </button>
+      <button class="btn btn-ghost" id="resetBtn" type="button">Start over</button>
+    </div>
+  </div>
+
+  <footer>Runs entirely in your browser. Files never leave your device.</footer>
+</div>
+
+<script>
+(function(){
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const chooseBtn = document.getElementById('chooseBtn');
+  const dzEmpty = document.getElementById('dzEmpty');
+  const dzFilled = document.getElementById('dzFilled');
+  const thumbImg = document.getElementById('thumbImg');
+  const fileNameEl = document.getElementById('fileName');
+  const fileInfoEl = document.getElementById('fileInfo');
+  const clearBtn = document.getElementById('clearBtn');
+
+  const targetValue = document.getElementById('targetValue');
+  const unitBtns = document.querySelectorAll('.unit-btn');
+  const presetChips = document.querySelectorAll('.preset-chip');
+  const compressBtn = document.getElementById('compressBtn');
+
+  const gaugeWrap = document.getElementById('gaugeWrap');
+  const gaugeFill = document.getElementById('gaugeFill');
+  const gaugeNow = document.getElementById('gaugeNow');
+  const gaugeStatus = document.getElementById('gaugeStatus');
+  const gaugeTargetLine = document.getElementById('gaugeTargetLine');
+  const warnBanner = document.getElementById('warnBanner');
+  const warnText = document.getElementById('warnText');
+
+  const resultsCard = document.getElementById('resultsCard');
+  const origImg = document.getElementById('origImg');
+  const compImg = document.getElementById('compImg');
+  const origSize = document.getElementById('origSize');
+  const compSize = document.getElementById('compSize');
+  const origDims = document.getElementById('origDims');
+  const compDims = document.getElementById('compDims');
+  const reductionPct = document.getElementById('reductionPct');
+  const statReduction = document.getElementById('statReduction');
+  const statQuality = document.getElementById('statQuality');
+  const statScale = document.getElementById('statScale');
+  const downloadBtn = document.getElementById('downloadBtn');
+  const resetBtn = document.getElementById('resetBtn');
+
+  let currentUnit = 'KB';
+  let sourceFile = null;
+  let sourceImageEl = null; // decoded HTMLImageElement
+  let sourceDataUrl = null;
+  let compressedBlob = null;
+  let compressedUrl = null;
+  let maxWorkingDim = 0; // natural largest dimension
+
+  function bytesToReadable(b){
+    if(b >= 1024*1024) return (b/(1024*1024)).toFixed(2) + ' MB';
+    return (b/1024).toFixed(1) + ' KB';
+  }
+
+  function targetBytes(){
+    const v = parseFloat(targetValue.value) || 0;
+    return currentUnit === 'MB' ? v * 1024 * 1024 : v * 1024;
+  }
+
+  // ---- Unit toggle ----
+  unitBtns.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      unitBtns.forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      currentUnit = btn.dataset.unit;
+      presetChips.forEach(c=>c.classList.remove('active'));
+    });
+  });
+
+  // ---- Presets ----
+  presetChips.forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      presetChips.forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+      targetValue.value = chip.dataset.val;
+      const u = chip.dataset.unit;
+      unitBtns.forEach(b=>{
+        b.classList.toggle('active', b.dataset.unit === u);
+      });
+      currentUnit = u;
+    });
+  });
+  targetValue.addEventListener('input', ()=>{
+    presetChips.forEach(c=>c.classList.remove('active'));
+  });
+
+  // ---- Upload interactions ----
+  chooseBtn.addEventListener('click', (e)=>{ e.stopPropagation(); fileInput.click(); });
+  dropzone.addEventListener('click', (e)=>{
+    if(!dropzone.classList.contains('has-image')) fileInput.click();
+  });
+  fileInput.addEventListener('change', (e)=>{
+    if(e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
+  });
+
+  ['dragenter','dragover'].forEach(evt=>{
+    dropzone.addEventListener(evt, (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      dropzone.classList.add('drag');
+    });
+  });
+  ['dragleave','drop'].forEach(evt=>{
+    dropzone.addEventListener(evt, (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      dropzone.classList.remove('drag');
+    });
+  });
+  dropzone.addEventListener('drop', (e)=>{
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if(f) handleFile(f);
+  });
+
+  clearBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    resetAll();
+  });
+
+  const VALID_TYPES = ['image/jpeg','image/png','image/webp'];
+
+  function handleFile(file){
+    if(!VALID_TYPES.includes(file.type)){
+      alert('Please upload a JPG, PNG, or WebP image.');
+      return;
+    }
+    sourceFile = file;
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      sourceDataUrl = e.target.result;
+      const img = new Image();
+      img.onload = ()=>{
+        sourceImageEl = img;
+        maxWorkingDim = Math.max(img.naturalWidth, img.naturalHeight);
+        thumbImg.src = sourceDataUrl;
+        fileNameEl.textContent = file.name;
+        fileInfoEl.textContent = `${bytesToReadable(file.size)} · ${img.naturalWidth}×${img.naturalHeight}`;
+        dzEmpty.style.display = 'none';
+        dzFilled.style.display = 'block';
+        dropzone.classList.add('has-image');
+        compressBtn.disabled = false;
+        hideResults();
+        hideGauge();
+      };
+      img.src = sourceDataUrl;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function resetAll(){
+    sourceFile = null;
+    sourceImageEl = null;
+    sourceDataUrl = null;
+    compressedBlob = null;
+    if(compressedUrl){ URL.revokeObjectURL(compressedUrl); compressedUrl = null; }
+    fileInput.value = '';
+    dzEmpty.style.display = 'block';
+    dzFilled.style.display = 'none';
+    dropzone.classList.remove('has-image');
+    compressBtn.disabled = true;
+    hideResults();
+    hideGauge();
+  }
+
+  function hideResults(){ resultsCard.classList.remove('show'); }
+  function hideGauge(){
+    gaugeWrap.classList.remove('show');
+    warnBanner.classList.remove('show');
+  }
+
+  // ---- Compression engine ----
+  compressBtn.addEventListener('click', runCompression);
+
+  function drawToCanvas(img, w, h){
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    // flatten transparency onto white for JPEG-style output consistency when needed
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas;
+  }
+
+  function canvasToBlob(canvas, mime, quality){
+    return new Promise(resolve=>{
+      canvas.toBlob(blob=>resolve(blob), mime, quality);
+    });
+  }
+
+  async function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+  function updateGauge(currentBytes, targetB, statusText, ok){
+    gaugeWrap.classList.add('show');
+    const maxRef = Math.max(sourceFile.size, targetB, currentBytes) * 1.05;
+    const pct = Math.min(100, (currentBytes / maxRef) * 100);
+    const targetPct = Math.min(100, (targetB / maxRef) * 100);
+    gaugeFill.style.width = pct + '%';
+    gaugeFill.classList.toggle('ok', ok);
+    gaugeTargetLine.style.left = targetPct + '%';
+    gaugeNow.textContent = bytesToReadable(currentBytes);
+    gaugeStatus.innerHTML = (ok ? '' : '<span class="spinner"></span>') + '<span>'+statusText+'</span>';
+  }
+
+  async function runCompression(){
+    if(!sourceImageEl || !sourceFile) return;
+    const targetB = targetBytes();
+    if(targetB <= 0){
+      alert('Enter a target size greater than 0.');
+      return;
+    }
+
+    compressBtn.disabled = true;
+    compressBtn.textContent = 'Compressing…';
+    hideResults();
+    warnBanner.classList.remove('show');
+    updateGauge(sourceFile.size, targetB, 'Starting…', false);
+    await sleep(50);
+
+    const originalMime = sourceFile.type;
+    // Choose working mime: PNG source with no transparency need can go to JPEG for better ratio,
+    // but keep PNG lossless path if source is PNG and target is generous; otherwise prefer JPEG for photos.
+    const preferJPEG = true; // JPEG/WebP give real quality control; use JPEG as universal compressor unless PNG needed for transparency
+    const hasAlpha = await imageHasAlpha(sourceImageEl);
+    let outputMime = 'image/jpeg';
+    if(hasAlpha){
+      outputMime = (originalMime === 'image/webp') ? 'image/webp' : 'image/png';
+    } else if(originalMime === 'image/webp'){
+      outputMime = 'image/webp';
+    }
+
+    const naturalW = sourceImageEl.naturalWidth;
+    const naturalH = sourceImageEl.naturalHeight;
+
+    let bestBlob = null;
+    let bestScale = 1;
+    let bestQuality = null;
+    let achieved = false;
+
+    // Strategy:
+    // 1. Try quality-only compression at full scale (binary search over quality) for lossy formats.
+    // 2. If even lowest quality at full scale still exceeds target, progressively downscale dimensions
+    //    and repeat quality search at each scale until target is met or we hit a minimum size floor.
+    // For lossless PNG w/ alpha and no viable quality axis, downscale dimensions directly.
+
+    const scales = [1, 0.85, 0.7, 0.55, 0.4, 0.3, 0.22, 0.16, 0.11, 0.08];
+    const minDim = 64; // don't go below this on the longest edge
+
+    outer:
+    for(let si=0; si<scales.length; si++){
+      const scale = scales[si];
+      let w = Math.round(naturalW * scale);
+      let h = Math.round(naturalH * scale);
+      if(Math.max(w,h) < minDim){
+        // clamp to minDim on the longer edge
+        const ratio = minDim / Math.max(naturalW, naturalH);
+        w = Math.max(1, Math.round(naturalW * ratio));
+        h = Math.max(1, Math.round(naturalH * ratio));
+      }
+
+      const canvas = drawToCanvas(sourceImageEl, w, h);
+
+      if(outputMime === 'image/png'){
+        // PNG has no quality knob — size is what it is at this resolution.
+        const blob = await canvasToBlob(canvas, 'image/png');
+        updateGauge(blob.size, targetB, `Trying ${w}×${h} (PNG)…`, false);
+        await sleep(10);
+        if(blob.size <= targetB){
+          bestBlob = blob; bestScale = scale; bestQuality = null; achieved = true;
+          break outer;
+        }
+        // keep the smallest attempt so far as fallback
+        if(!bestBlob || blob.size < bestBlob.size){
+          bestBlob = blob; bestScale = scale; bestQuality = null;
+        }
+        continue;
+      }
+
+      // Lossy formats: binary search quality
+      let lo = 0.05, hi = 0.95;
+      let localBest = null;
+      let localBestQ = null;
+      for(let iter=0; iter<7; iter++){
+        const q = (lo + hi) / 2;
+        const blob = await canvasToBlob(canvas, outputMime, q);
+        updateGauge(blob.size, targetB, `Trying ${w}×${h} @ quality ${(q*100).toFixed(0)}%…`, false);
+        await sleep(6);
+        if(blob.size <= targetB){
+          localBest = blob; localBestQ = q;
+          lo = q; // can afford higher quality
+        } else {
+          hi = q; // need smaller
+        }
+      }
+      // also test the low bound explicitly in case binary search never found a hit
+      if(!localBest){
+        const blob = await canvasToBlob(canvas, outputMime, 0.05);
+        updateGauge(blob.size, targetB, `Trying ${w}×${h} @ quality 5%…`, false);
+        await sleep(6);
+        if(blob.size <= targetB){
+          localBest = blob; localBestQ = 0.05;
+        } else if(!bestBlob || blob.size < bestBlob.size){
+          bestBlob = blob; bestScale = scale; bestQuality = 0.05;
+        }
+      }
+
+      if(localBest){
+        bestBlob = localBest; bestScale = scale; bestQuality = localBestQ; achieved = true;
+        break outer;
+      }
+    }
+
+    if(!bestBlob){
+      // absolute fallback: smallest scale, lowest quality
+      const w = Math.max(1, Math.round(naturalW * 0.08));
+      const h = Math.max(1, Math.round(naturalH * 0.08));
+      const canvas = drawToCanvas(sourceImageEl, w, h);
+      bestBlob = await canvasToBlob(canvas, outputMime === 'image/png' ? 'image/png' : outputMime, 0.05);
+      bestScale = 0.08;
+      bestQuality = outputMime === 'image/png' ? null : 0.05;
+    }
+
+    achieved = bestBlob.size <= targetB;
+    updateGauge(bestBlob.size, targetB, achieved ? 'Target reached' : 'Best possible result', achieved);
+
+    if(!achieved){
+      warnText.textContent = `Couldn't quite reach ${bytesToReadable(targetB)} without destroying the image — this is the smallest, cleanest result we could produce at ${bytesToReadable(bestBlob.size)}.`;
+      warnBanner.classList.add('show');
+    }
+
+    // Render results
+    compressedBlob = bestBlob;
+    if(compressedUrl) URL.revokeObjectURL(compressedUrl);
+    compressedUrl = URL.createObjectURL(bestBlob);
+
+    const outW = Math.round(naturalW * bestScale);
+    const outH = Math.round(naturalH * bestScale);
+
+    origImg.src = sourceDataUrl;
+    compImg.src = compressedUrl;
+    origSize.textContent = bytesToReadable(sourceFile.size);
+    compSize.textContent = bytesToReadable(bestBlob.size);
+    origDims.textContent = `${naturalW} × ${naturalH}px`;
+    compDims.textContent = `${outW} × ${outH}px`;
+
+    const reduction = Math.max(0, (1 - bestBlob.size / sourceFile.size) * 100);
+    reductionPct.textContent = reduction.toFixed(0) + '%';
+    statReduction.textContent = reduction.toFixed(0) + '%';
+    statQuality.textContent = bestQuality === null ? '—' : Math.round(bestQuality*100) + '%';
+    statScale.textContent = bestScale >= 1 ? 'Original' : Math.round(bestScale*100) + '%';
+
+    resultsCard.classList.add('show');
+    resultsCard.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+    compressBtn.disabled = false;
+    compressBtn.textContent = 'Compress Image';
+  }
+
+  function imageHasAlpha(img){
+    return new Promise(resolve=>{
+      try{
+        const c = document.createElement('canvas');
+        const sampleSize = 64;
+        c.width = sampleSize; c.height = sampleSize;
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
+        const data = ctx.getImageData(0,0,sampleSize,sampleSize).data;
+        for(let i=3; i<data.length; i+=4){
+          if(data[i] < 255){ resolve(true); return; }
+        }
+        resolve(false);
+      }catch(e){
+        resolve(false);
+      }
+    });
+  }
+
+  downloadBtn.addEventListener('click', ()=>{
+    if(!compressedBlob) return;
+    const a = document.createElement('a');
+    const ext = compressedBlob.type === 'image/png' ? 'png' : (compressedBlob.type === 'image/webp' ? 'webp' : 'jpg');
+    const baseName = (sourceFile.name || 'image').replace(/\.[^.]+$/, '');
+    a.href = compressedUrl;
+    a.download = `${baseName}-compressed.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  });
+
+  resetBtn.addEventListener('click', resetAll);
+
+})();
+</script>
+</body>
+</html>
