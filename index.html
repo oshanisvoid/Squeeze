@@ -1,1039 +1,208 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Squeeze — compress images to a target size</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Forge — fast, private browser-based file compression, conversion, PDF and image tools.">
+<meta name="theme-color" content="#12151c">
+<meta property="og:title" content="Forge — All Your File Tools in One Place">
+<meta property="og:description" content="Compress, convert, resize, rotate, merge and split files directly in your browser.">
+<title>Forge — All Your File Tools in One Place</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://unpkg.com/docx@9.5.1/build/index.umd.js"></script>
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
-  :root{
-    --ink:#12151C;
-    --ink-soft:#1B1F29;
-    --paper:#F1EFE9;
-    --paper-dim:#E4E1D8;
-    --line: rgba(241,239,233,0.12);
-    --line-strong: rgba(241,239,233,0.22);
-    --amber:#F5A623;
-    --amber-dim: rgba(245,166,35,0.16);
-    --teal:#4E9C82;
-    --teal-dim: rgba(78,156,130,0.16);
-    --clay:#D96C56;
-    --clay-dim: rgba(217,108,86,0.16);
-    --text-dim: rgba(241,239,233,0.58);
-    --text-faint: rgba(241,239,233,0.38);
-    --radius: 14px;
-    --display: 'Space Grotesk', sans-serif;
-    --body: 'Inter', sans-serif;
-    --mono: 'IBM Plex Mono', monospace;
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
-  body{
-    background: var(--ink);
-    color: var(--paper);
-    font-family: var(--body);
-    -webkit-font-smoothing: antialiased;
-    min-height:100vh;
-  }
-  ::selection{ background: var(--amber); color: var(--ink); }
-
-  a{color:inherit;}
-
-  .noise{
-    position:fixed; inset:0; pointer-events:none; z-index:0; opacity:0.035;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  }
-
-  .wrap{
-    position:relative; z-index:1;
-    max-width: 880px;
-    margin: 0 auto;
-    padding: 56px 24px 96px;
-  }
-
-  header.top{
-    display:flex; align-items:center; justify-content:space-between;
-    margin-bottom: 52px;
-  }
-  .brand{
-    display:flex; align-items:center; gap:10px;
-    font-family: var(--display);
-    font-weight:700;
-    font-size: 19px;
-    letter-spacing: -0.01em;
-  }
-  .brand .mark{
-    width:26px; height:26px; border-radius:7px;
-    background: linear-gradient(135deg, var(--amber), #d98a1a);
-    display:flex; align-items:center; justify-content:center;
-    flex-shrink:0;
-  }
-  .brand .mark svg{ width:14px; height:14px; }
-  .brand-sub{
-    font-family: var(--mono);
-    font-size:11px;
-    color: var(--text-faint);
-    letter-spacing: 0.04em;
-    margin-left: 4px;
-    padding-left:10px;
-    border-left: 1px solid var(--line-strong);
-  }
-
-  .hero{
-    margin-bottom: 44px;
-  }
-  .eyebrow{
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--amber);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 14px;
-    display:flex; align-items:center; gap:8px;
-  }
-  .eyebrow::before{
-    content:'';
-    width:6px; height:6px; border-radius:50%;
-    background: var(--amber);
-    box-shadow: 0 0 0 3px var(--amber-dim);
-  }
-  h1{
-    font-family: var(--display);
-    font-size: clamp(32px, 5vw, 46px);
-    line-height: 1.05;
-    letter-spacing: -0.02em;
-    margin: 0 0 14px;
-    font-weight: 700;
-  }
-  h1 em{
-    font-style: normal;
-    color: var(--amber);
-  }
-  .hero p{
-    font-size: 16px;
-    line-height:1.55;
-    color: var(--text-dim);
-    max-width: 52ch;
-    margin:0;
-  }
-
-  /* ---- Card shell ---- */
-  .card{
-    background: var(--ink-soft);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    padding: 28px;
-  }
-  .card + .card{ margin-top: 20px; }
-
-  /* ---- Dropzone ---- */
-  .dropzone{
-    border: 1.5px dashed var(--line-strong);
-    border-radius: 12px;
-    padding: 48px 24px;
-    text-align:center;
-    cursor:pointer;
-    transition: border-color .18s ease, background .18s ease;
-    position:relative;
-  }
-  .dropzone:hover, .dropzone.drag{
-    border-color: var(--amber);
-    background: var(--amber-dim);
-  }
-  .dropzone.has-image{
-    padding: 20px;
-    cursor:default;
-  }
-  .dz-icon{
-    width:44px; height:44px;
-    margin: 0 auto 18px;
-    border-radius:10px;
-    background: var(--amber-dim);
-    display:flex; align-items:center; justify-content:center;
-    color: var(--amber);
-  }
-  .dz-icon svg{ width:22px; height:22px; }
-  .dz-title{
-    font-family: var(--display);
-    font-weight:600;
-    font-size:17px;
-    margin-bottom:6px;
-  }
-  .dz-sub{
-    font-size:13.5px;
-    color: var(--text-faint);
-    margin-bottom: 22px;
-  }
-  .btn{
-    font-family: var(--body);
-    font-weight:600;
-    font-size: 14px;
-    border-radius: 9px;
-    border: none;
-    padding: 12px 22px;
-    cursor:pointer;
-    display:inline-flex;
-    align-items:center;
-    gap:8px;
-    transition: transform .12s ease, filter .12s ease, background .12s ease, opacity .12s ease;
-  }
-  .btn:active{ transform: scale(0.97); }
-  .btn-primary{
-    background: var(--amber);
-    color: var(--ink);
-  }
-  .btn-primary:hover{ filter: brightness(1.08); }
-  .btn-primary:disabled{
-    opacity:0.4; cursor:not-allowed; filter:none;
-  }
-  .btn-ghost{
-    background: transparent;
-    color: var(--paper);
-    border: 1px solid var(--line-strong);
-  }
-  .btn-ghost:hover{ border-color: var(--amber); color: var(--amber); }
-  .btn-block{ width:100%; justify-content:center; padding:14px; font-size:15px; }
-
-  input[type=file]{ display:none; }
-
-  .preview-row{
-    display:flex; align-items:center; gap:16px;
-    text-align:left;
-  }
-  .preview-thumb{
-    width:76px; height:76px; border-radius:9px;
-    object-fit:cover;
-    flex-shrink:0;
-    border:1px solid var(--line-strong);
-    background: var(--ink);
-  }
-  .preview-meta{ flex:1; min-width:0; }
-  .preview-name{
-    font-weight:600; font-size:14.5px;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    margin-bottom:4px;
-  }
-  .preview-info{
-    font-family: var(--mono);
-    font-size:12.5px;
-    color: var(--text-faint);
-  }
-  .preview-clear{
-    background:none; border:none; color: var(--text-faint);
-    cursor:pointer; padding:8px; border-radius:8px; flex-shrink:0;
-    transition: color .15s ease, background .15s ease;
-  }
-  .preview-clear:hover{ color: var(--clay); background: var(--clay-dim); }
-  .preview-clear svg{ width:18px; height:18px; display:block; }
-
-  /* ---- Target size ---- */
-  .section-label{
-    font-family: var(--mono);
-    font-size: 11.5px;
-    letter-spacing:0.06em;
-    text-transform:uppercase;
-    color: var(--text-faint);
-    margin-bottom: 14px;
-  }
-  .target-row{
-    display:flex; gap:10px;
-  }
-  .target-input{
-    flex:1;
-    background: var(--ink);
-    border: 1px solid var(--line-strong);
-    border-radius: 9px;
-    padding: 0 16px;
-    height:52px;
-    font-family: var(--mono);
-    font-size: 20px;
-    font-weight:500;
-    color: var(--paper);
-    outline:none;
-    transition: border-color .15s ease;
-    width: 100%;
-  }
-  .target-input:focus{ border-color: var(--amber); }
-  .target-input::-webkit-outer-spin-button,
-  .target-input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
-  .target-input[type=number]{ -moz-appearance:textfield; }
-
-  .unit-toggle{
-    display:flex;
-    background: var(--ink);
-    border: 1px solid var(--line-strong);
-    border-radius: 9px;
-    padding: 4px;
-    height:52px;
-    flex-shrink:0;
-  }
-  .unit-btn{
-    font-family: var(--mono);
-    font-weight:600;
-    font-size:13px;
-    background:none;
-    border:none;
-    color: var(--text-faint);
-    padding: 0 18px;
-    border-radius:6px;
-    cursor:pointer;
-    transition: background .15s ease, color .15s ease;
-  }
-  .unit-btn.active{
-    background: var(--amber);
-    color: var(--ink);
-  }
-
-  .presets{
-    display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;
-  }
-  .preset-chip{
-    font-family: var(--mono);
-    font-size: 12.5px;
-    background: var(--ink);
-    border: 1px solid var(--line-strong);
-    color: var(--text-dim);
-    padding: 7px 13px;
-    border-radius: 20px;
-    cursor:pointer;
-    transition: border-color .15s ease, color .15s ease;
-  }
-  .preset-chip:hover, .preset-chip.active{
-    border-color: var(--amber);
-    color: var(--amber);
-  }
-
-  /* ---- Compress action ---- */
-  .compress-block{ margin-top: 22px; }
-
-  /* ---- Gauge (signature element) ---- */
-  .gauge-wrap{
-    margin-top: 20px;
-    display:none;
-  }
-  .gauge-wrap.show{ display:block; }
-  .gauge-labels{
-    display:flex; justify-content:space-between;
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--text-faint);
-    margin-bottom:8px;
-  }
-  .gauge-labels .now{ color: var(--paper); font-weight:500; }
-  .gauge-track{
-    position:relative;
-    height: 10px;
-    background: var(--ink);
-    border-radius: 6px;
-    overflow:hidden;
-    border: 1px solid var(--line-strong);
-  }
-  .gauge-fill{
-    position:absolute; left:0; top:0; bottom:0;
-    width:0%;
-    background: linear-gradient(90deg, var(--amber), #d98a1a);
-    border-radius: 6px;
-    transition: width .35s cubic-bezier(.4,0,.2,1), background .3s ease;
-  }
-  .gauge-fill.ok{ background: linear-gradient(90deg, var(--teal), #3f8570); }
-  .gauge-target-line{
-    position:absolute; top:-3px; bottom:-3px;
-    width:2px;
-    background: var(--paper);
-    left: 100%;
-  }
-  .gauge-status{
-    font-family: var(--mono);
-    font-size: 12.5px;
-    color: var(--text-faint);
-    margin-top:10px;
-    min-height:16px;
-    display:flex; align-items:center; gap:8px;
-  }
-  .spinner{
-    width:12px; height:12px;
-    border-radius:50%;
-    border: 2px solid var(--line-strong);
-    border-top-color: var(--amber);
-    animation: spin 0.7s linear infinite;
-    flex-shrink:0;
-  }
-  @keyframes spin{ to{ transform: rotate(360deg); } }
-
-  .warn-banner{
-    display:none;
-    margin-top:16px;
-    background: var(--clay-dim);
-    border: 1px solid rgba(217,108,86,0.4);
-    border-radius: 10px;
-    padding: 14px 16px;
-    font-size: 13.5px;
-    line-height:1.5;
-    color: var(--paper);
-  }
-  .warn-banner.show{ display:flex; gap:10px; align-items:flex-start; }
-  .warn-banner svg{ width:18px; height:18px; flex-shrink:0; margin-top:1px; color: var(--clay); }
-
-  /* ---- Results ---- */
-  .results{
-    display:none;
-    margin-top: 20px;
-  }
-  .results.show{ display:block; }
-
-  .result-summary{
-    display:flex; align-items:center; gap:8px;
-    font-family: var(--display);
-    font-weight:600;
-    font-size:18px;
-    margin-bottom:22px;
-  }
-  .check-badge{
-    width:24px; height:24px; border-radius:50%;
-    background: var(--teal);
-    display:flex; align-items:center; justify-content:center;
-    flex-shrink:0;
-  }
-  .check-badge svg{ width:13px; height:13px; color: var(--ink); }
-  .result-summary .pct{ color: var(--teal); }
-
-  .compare-grid{
-    display:grid; grid-template-columns: 1fr 1fr; gap: 14px;
-    margin-bottom: 22px;
-  }
-  @media (max-width: 560px){ .compare-grid{ grid-template-columns: 1fr; } }
-
-  .compare-panel{
-    background: var(--ink);
-    border: 1px solid var(--line-strong);
-    border-radius: 11px;
-    overflow:hidden;
-  }
-  .compare-panel .img-holder{
-    aspect-ratio: 4/3;
-    background:
-      linear-gradient(45deg, #20242e 25%, transparent 25%),
-      linear-gradient(-45deg, #20242e 25%, transparent 25%),
-      linear-gradient(45deg, transparent 75%, #20242e 75%),
-      linear-gradient(-45deg, transparent 75%, #20242e 75%);
-    background-size: 16px 16px;
-    background-position: 0 0, 0 8px, 8px -8px, -8px 0px;
-    display:flex; align-items:center; justify-content:center;
-  }
-  .compare-panel img{
-    width:100%; height:100%; object-fit:contain;
-    display:block;
-  }
-  .compare-panel .panel-foot{
-    padding: 14px 16px;
-    border-top: 1px solid var(--line);
-  }
-  .panel-tag{
-    font-family: var(--mono);
-    font-size:10.5px;
-    letter-spacing:0.06em;
-    text-transform:uppercase;
-    color: var(--text-faint);
-    margin-bottom:6px;
-  }
-  .panel-tag.tag-compressed{ color: var(--teal); }
-  .panel-size{
-    font-family: var(--mono);
-    font-size: 20px;
-    font-weight:600;
-  }
-  .panel-dims{
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--text-faint);
-    margin-top:3px;
-  }
-
-  .stat-strip{
-    display:grid; grid-template-columns: repeat(3,1fr);
-    gap:1px;
-    background: var(--line-strong);
-    border: 1px solid var(--line-strong);
-    border-radius: 11px;
-    overflow:hidden;
-    margin-bottom: 22px;
-  }
-  .stat-cell{
-    background: var(--ink);
-    padding: 16px 14px;
-    text-align:center;
-  }
-  .stat-cell .stat-val{
-    font-family: var(--mono);
-    font-size: 19px;
-    font-weight:600;
-    color: var(--amber);
-  }
-  .stat-cell .stat-lbl{
-    font-family: var(--mono);
-    font-size: 10.5px;
-    letter-spacing:0.05em;
-    text-transform:uppercase;
-    color: var(--text-faint);
-    margin-top:4px;
-  }
-
-  .result-actions{
-    display:flex; gap:10px;
-  }
-  .result-actions .btn-primary{ flex:1; }
-
-  footer{
-    text-align:center;
-    margin-top: 48px;
-    font-family: var(--mono);
-    font-size: 11.5px;
-    color: var(--text-faint);
-    letter-spacing:0.02em;
-  }
-
-  @media (prefers-reduced-motion: reduce){
-    .gauge-fill, .spinner, .btn{ transition:none; animation:none; }
-  }
-
-  @media (max-width: 600px){
-    .wrap{ padding: 36px 16px 64px; }
-    .card{ padding: 20px; }
-    .target-row{ flex-direction:column; }
-    .unit-toggle{ width:100%; }
-  }
+:root{--ink:#12151c;--soft:#1b1f29;--paper:#f1efe9;--dim:rgba(241,239,233,.62);--faint:rgba(241,239,233,.4);--line:rgba(241,239,233,.11);--line2:rgba(241,239,233,.2);--amber:#f5a623;--amber2:rgba(245,166,35,.15);--teal:#4e9c82;--teal2:rgba(78,156,130,.15);--clay:#d96c56;--clay2:rgba(217,108,86,.15);--radius:14px;--display:"Space Grotesk",sans-serif;--body:"Inter",sans-serif;--mono:"IBM Plex Mono",monospace}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--ink);color:var(--paper);font-family:var(--body);-webkit-font-smoothing:antialiased}body{overflow-x:hidden}button,input,select,textarea{font:inherit}button{cursor:pointer}a{color:inherit;text-decoration:none}
+.noise{position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.035;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.shell{position:relative;z-index:1;max-width:1180px;margin:auto;padding:24px 22px 80px}.top{height:58px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);margin-bottom:58px}.brand{display:flex;align-items:center;gap:10px;font:700 19px var(--display)}.mark{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,var(--amber),#d98a1a);display:grid;place-items:center;color:var(--ink);font-weight:800}.brand small{font:500 10px var(--mono);letter-spacing:.08em;color:var(--faint);border-left:1px solid var(--line2);padding-left:10px;margin-left:3px}.nav{display:flex;gap:6px;align-items:center}.nav a,.nav button{background:transparent;border:0;color:var(--dim);padding:9px 11px;border-radius:9px;font-size:13px}.nav a:hover,.nav button:hover,.nav .active{background:var(--soft);color:var(--paper)}.hero{padding:10px 0 38px;display:grid;grid-template-columns:1.2fr .8fr;gap:50px;align-items:end}.eyebrow{color:var(--amber);font:11px var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px;display:flex;gap:8px;align-items:center}.eyebrow:before{content:"";width:6px;height:6px;border-radius:50%;background:var(--amber);box-shadow:0 0 0 4px var(--amber2)}h1{font:700 clamp(40px,6vw,70px)/.98 var(--display);letter-spacing:-.045em;margin:0 0 20px;max-width:760px}h1 em{font-style:normal;color:var(--amber)}.hero p{color:var(--dim);line-height:1.65;max-width:62ch;margin:0;font-size:15px}.search{background:var(--soft);border:1px solid var(--line2);border-radius:13px;padding:8px;display:flex;align-items:center;box-shadow:0 18px 50px rgba(0,0,0,.14)}.search input{background:transparent;border:0;outline:0;color:var(--paper);width:100%;padding:12px 10px;font-size:14px}.search span{font:11px var(--mono);color:var(--faint);padding:0 10px;white-space:nowrap}
+.page{display:none}.page.active{display:block}.section-head{display:flex;justify-content:space-between;gap:20px;align-items:end;margin:0 0 20px}.section-head h2{font:600 24px var(--display);margin:0}.section-head p{font-size:13px;color:var(--faint);margin:6px 0 0}.categories{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:26px}.chip{border:1px solid var(--line2);background:transparent;color:var(--dim);padding:8px 12px;border-radius:999px;font:12px var(--mono)}.chip.active,.chip:hover{border-color:var(--amber);color:var(--amber);background:var(--amber2)}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.tool{background:var(--soft);border:1px solid var(--line);border-radius:13px;padding:18px;min-height:150px;transition:.18s transform,.18s border-color,.18s background}.tool:hover{transform:translateY(-2px);border-color:var(--line2);background:#20242e}.tool .ico{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:var(--amber2);color:var(--amber);font:600 12px var(--mono);margin-bottom:18px}.tool h3{font:600 15px var(--display);margin:0 0 7px}.tool p{font-size:12px;line-height:1.5;color:var(--faint);margin:0}.tool .tag{display:inline-block;margin-top:13px;font:10px var(--mono);color:var(--teal)}
+.card{background:var(--soft);border:1px solid var(--line);border-radius:var(--radius);padding:22px;margin-top:16px}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}.tooltitle{font:600 23px var(--display);margin:0}.muted{color:var(--faint);font-size:12px}.btn{border:0;border-radius:9px;padding:11px 15px;font-size:13px;font-weight:600;display:inline-flex;gap:8px;align-items:center;justify-content:center;transition:.15s}.btn:active{transform:scale(.98)}.primary{background:var(--amber);color:var(--ink)}.primary:hover{filter:brightness(1.08)}.ghost{background:transparent;color:var(--paper);border:1px solid var(--line2)}.ghost:hover{border-color:var(--amber);color:var(--amber)}.danger{background:var(--clay2);color:#f39a87;border:1px solid rgba(217,108,86,.3)}.btn:disabled{opacity:.42;cursor:not-allowed}
+.drop{border:1.5px dashed var(--line2);border-radius:12px;min-height:190px;padding:32px 18px;display:grid;place-items:center;text-align:center;transition:.15s}.drop.drag{border-color:var(--amber);background:var(--amber2)}.drop h3{font:600 17px var(--display);margin:12px 0 6px}.drop p{color:var(--faint);font-size:12px;margin:0 0 16px}.drop .dropico{width:45px;height:45px;border-radius:12px;background:var(--amber2);color:var(--amber);display:grid;place-items:center;margin:auto;font:700 16px var(--mono)}input[type=file]{display:none}
+.filelist{display:grid;gap:8px;margin-top:14px}.fileitem{display:grid;grid-template-columns:42px 1fr auto;gap:12px;align-items:center;padding:10px;background:var(--ink);border:1px solid var(--line);border-radius:10px}.thumb{width:42px;height:42px;border-radius:7px;object-fit:cover;background:#20242e}.fileitem strong{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fileitem small{display:block;color:var(--faint);font:10px var(--mono);margin-top:3px}.iconbtn{border:0;background:transparent;color:var(--faint);padding:7px;border-radius:7px}.iconbtn:hover{color:var(--clay);background:var(--clay2)}
+.controls{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px}.field{display:grid;gap:7px}.field label{font:10px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}.field input,.field select,.field textarea{width:100%;background:var(--ink);border:1px solid var(--line2);border-radius:9px;color:var(--paper);outline:0;padding:11px 12px}.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--amber)}.check{display:flex;align-items:center;gap:8px;color:var(--dim);font-size:12px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.status{margin-top:13px;color:var(--faint);font:11px var(--mono);min-height:16px}.progress{height:7px;border-radius:8px;background:var(--ink);border:1px solid var(--line);overflow:hidden;margin-top:9px}.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--amber),#d98a1a);transition:width .2s}.resultgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px}.previewbox{background:var(--ink);border:1px solid var(--line2);border-radius:11px;padding:12px}.previewbox img{width:100%;max-height:360px;object-fit:contain;display:block;border-radius:8px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line2);border:1px solid var(--line2);border-radius:10px;overflow:hidden;margin-top:14px}.stat{background:var(--ink);padding:14px;text-align:center}.stat b{display:block;color:var(--amber);font:600 17px var(--mono)}.stat span{display:block;color:var(--faint);font:10px var(--mono);text-transform:uppercase;margin-top:4px}
+.tool-layout{display:grid;grid-template-columns:1fr 300px;gap:16px}.side{background:var(--soft);border:1px solid var(--line);border-radius:var(--radius);padding:18px;height:max-content}.side h3{font:600 15px var(--display);margin:0 0 12px}.side button{width:100%;text-align:left;background:transparent;border:1px solid transparent;color:var(--dim);padding:9px;border-radius:8px;font-size:12px}.side button:hover,.side button.active{background:var(--ink);border-color:var(--line);color:var(--paper)}.notice{padding:12px 14px;border:1px solid rgba(245,166,35,.25);background:var(--amber2);border-radius:10px;color:var(--dim);font-size:12px;line-height:1.55}.notice strong{color:var(--paper)}.unsupported{opacity:.72}.unsupported .tag{color:var(--clay)}
+.pdfpages{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:14px}.pdfpage{background:var(--ink);border:1px solid var(--line2);border-radius:9px;padding:8px;position:relative}.pdfpage canvas{width:100%;height:150px;object-fit:contain;background:#fff;border-radius:5px}.pdfpage .num{font:10px var(--mono);color:var(--faint);margin-top:6px}.pdfpage.selected{border-color:var(--amber);box-shadow:0 0 0 1px var(--amber2)}.pdfpage input{position:absolute;top:8px;left:8px}
+.empty{padding:40px;text-align:center;color:var(--faint);border:1px dashed var(--line2);border-radius:10px;font-size:12px}.searchresults{position:absolute;z-index:5;left:0;right:0;top:calc(100% + 8px);background:var(--soft);border:1px solid var(--line2);border-radius:12px;padding:7px;display:none;box-shadow:0 18px 50px rgba(0,0,0,.3)}.searchwrap{position:relative}.searchresults.show{display:block}.searchresult{display:flex;justify-content:space-between;gap:10px;padding:10px;border-radius:8px}.searchresult:hover{background:var(--ink)}.searchresult small{color:var(--faint);font:10px var(--mono)}
+footer{border-top:1px solid var(--line);margin-top:55px;padding-top:22px;display:flex;justify-content:space-between;gap:20px;color:var(--faint);font:10px var(--mono)}.privacy{color:var(--teal)}
+.toast{position:fixed;right:20px;bottom:20px;z-index:20;background:var(--paper);color:var(--ink);padding:12px 15px;border-radius:10px;font-size:12px;box-shadow:0 15px 45px rgba(0,0,0,.35);display:none}.toast.show{display:block}
+@media(max-width:950px){.grid{grid-template-columns:repeat(3,1fr)}.hero{grid-template-columns:1fr}.tool-layout{grid-template-columns:1fr}.side{order:-1;display:flex;gap:7px;overflow:auto}.side h3{display:none}.side button{width:auto;white-space:nowrap}.nav a{display:none}}
+@media(max-width:680px){.shell{padding:18px 14px 60px}.top{margin-bottom:35px}.brand small{display:none}.grid{grid-template-columns:repeat(2,1fr)}.controls,.resultgrid{grid-template-columns:1fr}.stats{grid-template-columns:1fr}.hero{padding-bottom:25px}h1{font-size:43px}.card{padding:16px}.tool{min-height:135px;padding:14px}.pdfpages{grid-template-columns:repeat(2,1fr)}footer{display:block}.footer-right{margin-top:8px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 </style>
 </head>
 <body>
 <div class="noise"></div>
-<div class="wrap">
+<div class="shell">
+<header class="top">
+  <a class="brand" href="/" data-route="/"><span class="mark">↗</span>Forge<small>FILE TOOLS</small></a>
+  <nav class="nav">
+    <a href="/" data-route="/">Home</a>
+    <a href="/compress" data-route="/compress">Compress</a>
+    <a href="/image-resizer" data-route="/image-resizer">Images</a>
+    <a href="/merge-pdf" data-route="/merge-pdf">PDF</a>
+  </nav>
+</header>
 
-  <header class="top">
-    <div class="brand">
-      <span class="mark">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M4 12 L10 6 M4 12 L10 18 M20 12 L14 6 M20 12 L14 18" stroke="#12151C" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </span>
-      Squeeze
-      <span class="brand-sub">IMAGE → TARGET BYTES</span>
-    </div>
-  </header>
-
+<main>
+<section id="home" class="page active">
   <div class="hero">
-    <div class="eyebrow">Client-side · nothing uploaded</div>
-    <h1>Hit an exact file size, <em>without the guesswork.</em></h1>
-    <p>Drop in an image, set a byte budget, and Squeeze iterates on quality — and dimensions if it must — until your file lands at or under the limit.</p>
-  </div>
-
-  <!-- Upload card -->
-  <div class="card">
-    <div class="dropzone" id="dropzone">
-      <input type="file" id="fileInput" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
-      <div id="dzEmpty">
-        <div class="dz-icon">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M12 16V4M12 4L7 9M12 4l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </div>
-        <div class="dz-title">Drag an image here</div>
-        <div class="dz-sub">or choose a file — JPG, PNG, WebP</div>
-        <button class="btn btn-primary" id="chooseBtn" type="button">Choose Image</button>
-      </div>
-      <div id="dzFilled" style="display:none;">
-        <div class="preview-row">
-          <img id="thumbImg" class="preview-thumb" alt="Selected image preview">
-          <div class="preview-meta">
-            <div class="preview-name" id="fileName">—</div>
-            <div class="preview-info" id="fileInfo">—</div>
-          </div>
-          <button class="preview-clear" id="clearBtn" type="button" title="Remove image" aria-label="Remove image">
-            <svg viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          </button>
-        </div>
-      </div>
+    <div>
+      <div class="eyebrow">Private · browser-first · no fake conversions</div>
+      <h1>All your file tools in <em>one place.</em></h1>
+      <p>Compress, convert, resize, rotate, merge and split common files without uploading them when the browser can do the job locally.</p>
+    </div>
+    <div class="searchwrap">
+      <div class="search"><span>⌕</span><input id="toolSearch" placeholder="Search for a tool…" autocomplete="off"><span>TOOLS</span></div>
+      <div id="searchResults" class="searchresults"></div>
     </div>
   </div>
+  <div class="section-head"><div><h2>Popular tools</h2><p>Start with the most useful everyday utilities.</p></div></div>
+  <div id="toolGrid" class="grid"></div>
+</section>
 
-  <!-- Target size card -->
-  <div class="card">
-    <div class="section-label">Maximum File Size</div>
-    <div class="target-row">
-      <input type="number" class="target-input" id="targetValue" value="500" min="1" step="1" inputmode="numeric">
-      <div class="unit-toggle">
-        <button class="unit-btn active" data-unit="KB" type="button">KB</button>
-        <button class="unit-btn" data-unit="MB" type="button">MB</button>
-      </div>
-    </div>
-    <div class="presets">
-      <button class="preset-chip" data-val="100" data-unit="KB" type="button">100 KB</button>
-      <button class="preset-chip active" data-val="500" data-unit="KB" type="button">500 KB</button>
-      <button class="preset-chip" data-val="1" data-unit="MB" type="button">1 MB</button>
-      <button class="preset-chip" data-val="2" data-unit="MB" type="button">2 MB</button>
-      <button class="preset-chip" data-val="5" data-unit="MB" type="button">5 MB</button>
-    </div>
-
-    <div class="compress-block">
-      <button class="btn btn-primary btn-block" id="compressBtn" disabled type="button">Compress Image</button>
-
-      <div class="gauge-wrap" id="gaugeWrap">
-        <div class="gauge-labels">
-          <span>0 KB</span>
-          <span class="now" id="gaugeNow">— KB</span>
-        </div>
-        <div class="gauge-track">
-          <div class="gauge-fill" id="gaugeFill"></div>
-          <div class="gauge-target-line" id="gaugeTargetLine"></div>
-        </div>
-        <div class="gauge-status" id="gaugeStatus"></div>
-      </div>
-
-      <div class="warn-banner" id="warnBanner">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span id="warnText"></span>
-      </div>
+<section id="toolPage" class="page">
+  <div class="tool-layout">
+    <aside class="side" id="sideNav"></aside>
+    <div>
+      <div class="toolbar"><div><h2 id="toolTitle" class="tooltitle">Tool</h2><div id="toolDesc" class="muted"></div></div><button class="btn ghost" data-route="/">← All tools</button></div>
+      <div id="toolContent"></div>
     </div>
   </div>
+</section>
+</main>
 
-  <!-- Results -->
-  <div class="card results" id="resultsCard">
-    <div class="result-summary">
-      <span class="check-badge"><svg viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-      Compressed — <span class="pct" id="reductionPct">0%</span> smaller
-    </div>
-
-    <div class="compare-grid">
-      <div class="compare-panel">
-        <div class="img-holder"><img id="origImg" alt="Original image"></div>
-        <div class="panel-foot">
-          <div class="panel-tag">Original</div>
-          <div class="panel-size" id="origSize">—</div>
-          <div class="panel-dims" id="origDims">—</div>
-        </div>
-      </div>
-      <div class="compare-panel">
-        <div class="img-holder"><img id="compImg" alt="Compressed image"></div>
-        <div class="panel-foot">
-          <div class="panel-tag tag-compressed">Compressed</div>
-          <div class="panel-size" id="compSize">—</div>
-          <div class="panel-dims" id="compDims">—</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="stat-strip">
-      <div class="stat-cell">
-        <div class="stat-val" id="statReduction">0%</div>
-        <div class="stat-lbl">Reduction</div>
-      </div>
-      <div class="stat-cell">
-        <div class="stat-val" id="statQuality">—</div>
-        <div class="stat-lbl">Quality used</div>
-      </div>
-      <div class="stat-cell">
-        <div class="stat-val" id="statScale">—</div>
-        <div class="stat-lbl">Scale</div>
-      </div>
-    </div>
-
-    <div class="result-actions">
-      <button class="btn btn-primary" id="downloadBtn" type="button">
-        <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 4v12M12 16l-4-4M12 16l4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 18v1a2 2 0 002 2h12a2 2 0 002-2v-1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Download Compressed Image
-      </button>
-      <button class="btn btn-ghost" id="resetBtn" type="button">Start over</button>
-    </div>
-  </div>
-
-  <footer>Runs entirely in your browser. Files never leave your device.</footer>
+<footer><span>Forge · files stay on your device for browser-only tools.</span><span class="footer-right privacy">Local processing preferred · temporary server processing is not implemented.</span></footer>
 </div>
+<div id="toast" class="toast"></div>
 
 <script>
 (function(){
-  const dropzone = document.getElementById('dropzone');
-  const fileInput = document.getElementById('fileInput');
-  const chooseBtn = document.getElementById('chooseBtn');
-  const dzEmpty = document.getElementById('dzEmpty');
-  const dzFilled = document.getElementById('dzFilled');
-  const thumbImg = document.getElementById('thumbImg');
-  const fileNameEl = document.getElementById('fileName');
-  const fileInfoEl = document.getElementById('fileInfo');
-  const clearBtn = document.getElementById('clearBtn');
+"use strict";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+const fmt=b=>b>=1048576?(b/1048576).toFixed(2)+" MB":b>=1024?(b/1024).toFixed(1)+" KB":b+" B";
+const baseName=n=>n.replace(/\.[^.]+$/,"");
+const ext=n=>(n.split(".").pop()||"").toLowerCase();
+const download=(blob,name)=>{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+function toast(t){const e=$("#toast");e.textContent=t;e.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>e.classList.remove("show"),2600)}
+function setStatus(id,text,p=0){const e=$("#"+id);if(!e)return;e.textContent=text;const bar=e.parentElement.querySelector(".progress i");if(bar)bar.style.width=Math.max(0,Math.min(100,p))+"%"}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+function filePicker(multiple=true,accept="*/*"){return new Promise(resolve=>{const i=document.createElement("input");i.type="file";i.multiple=multiple;i.accept=accept;i.onchange=()=>resolve([...i.files]);i.click()})}
+function makeDrop(id,accept,multiple=true,onFiles=()=>{}){const e=$("#"+id), input=e.querySelector("input");const pick=()=>filePicker(multiple,accept).then(fs=>fs.length&&onFiles(fs));e.onclick=x=>{if(x.target.tagName!=="BUTTON")pick()};e.querySelector("button")?.addEventListener("click",x=>{x.stopPropagation();pick()});["dragenter","dragover"].forEach(v=>e.addEventListener(v,x=>{x.preventDefault();e.classList.add("drag")}));["dragleave","drop"].forEach(v=>e.addEventListener(v,x=>{x.preventDefault();e.classList.remove("drag")}));e.addEventListener("drop",x=>{const fs=[...x.dataTransfer.files];if(fs.length)onFiles(fs)});if(input)input.accept=accept}
+function uploadHTML(id,accept="*/*",multiple=true,label="Drop files here"){return `<div class="drop" id="${id}"><input type="file" accept="${accept}" ${multiple?"multiple":""}><div><div class="dropico">↑</div><h3>${label}</h3><p>or click to browse · files are processed locally where supported</p><button class="btn primary" type="button">Choose files</button></div></div>`}
 
-  const targetValue = document.getElementById('targetValue');
-  const unitBtns = document.querySelectorAll('.unit-btn');
-  const presetChips = document.querySelectorAll('.preset-chip');
-  const compressBtn = document.getElementById('compressBtn');
+const tools=[
+{route:"/compress",cat:"Compression",name:"Image compressor",desc:"Hit a target file size with quality and dimension iteration.",icon:"KB",run:renderCompressor},
+{route:"/jpg-to-png",cat:"Image",name:"JPG → PNG",desc:"Convert JPG/JPEG images to PNG.",icon:"J→P",run:()=>renderImageConverter("png","JPG to PNG")},
+{route:"/png-to-jpg",cat:"Image",name:"PNG → JPG",desc:"Convert PNG images to JPEG with background control.",icon:"P→J",run:()=>renderImageConverter("jpeg","PNG to JPG")},
+{route:"/png-to-webp",cat:"Image",name:"PNG → WebP",desc:"Convert PNG images to WebP.",icon:"P→W",run:()=>renderImageConverter("webp","PNG to WebP")},
+{route:"/webp-to-jpg",cat:"Image",name:"WebP → JPG",desc:"Convert WebP images to JPEG.",icon:"W→J",run:()=>renderImageConverter("jpeg","WebP to JPG")},
+{route:"/webp-to-png",cat:"Image",name:"WebP → PNG",desc:"Convert WebP images to PNG.",icon:"W→P",run:()=>renderImageConverter("png","WebP to PNG")},
+{route:"/jpg-to-webp",cat:"Image",name:"JPG → WebP",desc:"Convert JPEG images to compact WebP.",icon:"J→W",run:()=>renderImageConverter("webp","JPG to WebP")},
+{route:"/bmp-to-png",cat:"Image",name:"BMP → PNG",desc:"Convert BMP images when the browser can decode them.",icon:"B→P",run:()=>renderImageConverter("png","BMP to PNG")},
+{route:"/bmp-to-jpg",cat:"Image",name:"BMP → JPG",desc:"Convert BMP images to JPEG when supported.",icon:"B→J",run:()=>renderImageConverter("jpeg","BMP to JPG")},
+{route:"/gif-to-png",cat:"Image",name:"GIF → PNG",desc:"Convert the browser-decoded GIF frame to PNG.",icon:"G→P",run:()=>renderImageConverter("png","GIF to PNG")},
+{route:"/gif-to-jpg",cat:"Image",name:"GIF → JPG",desc:"Convert the browser-decoded GIF frame to JPEG.",icon:"G→J",run:()=>renderImageConverter("jpeg","GIF to JPG")},
+{route:"/avif-to-png",cat:"Image",name:"AVIF → PNG",desc:"Convert AVIF when your browser supports AVIF decoding.",icon:"A→P",run:()=>renderImageConverter("png","AVIF to PNG")},
+{route:"/avif-to-webp",cat:"Image",name:"AVIF → WebP",desc:"Convert AVIF when your browser supports AVIF decoding.",icon:"A→W",run:()=>renderImageConverter("webp","AVIF to WebP")},
+{route:"/image-resizer",cat:"Image",name:"Image resizer",desc:"Resize by dimensions, percentage or presets.",icon:"↔",run:renderResizer},
+{route:"/image-rotator",cat:"Image",name:"Image rotator",desc:"Rotate and flip images, with batch processing.",icon:"⟳",run:renderRotator},
+{route:"/jpg-to-pdf",cat:"PDF",name:"JPG → PDF",desc:"Create a PDF from one or many JPG images.",icon:"JPDF",run:()=>renderImagesToPdf("JPG to PDF","image/jpeg")},
+{route:"/png-to-pdf",cat:"PDF",name:"PNG → PDF",desc:"Create a PDF from PNG images.",icon:"PPDF",run:()=>renderImagesToPdf("PNG to PDF","image/png")},
+{route:"/images-to-pdf",cat:"PDF",name:"Images → PDF",desc:"Reorder images and combine them into one PDF.",icon:"PDF",run:()=>renderImagesToPdf("Images to PDF","image/*")},
+{route:"/pdf-to-jpg",cat:"PDF",name:"PDF → JPG",desc:"Render every PDF page as a JPG image.",icon:"PDFJ",run:()=>renderPdfToImages("PDF to JPG","image/jpeg")},
+{route:"/pdf-to-png",cat:"PDF",name:"PDF → PNG",desc:"Render PDF pages as PNG images.",icon:"PDFP",run:()=>renderPdfToImages("PDF to PNG","image/png")},
+{route:"/merge-pdf",cat:"PDF",name:"Merge PDF",desc:"Combine multiple PDF files into one document.",icon:"＋PDF",run:renderMergePdf},
+{route:"/split-pdf",cat:"PDF",name:"Split PDF",desc:"Extract page ranges or selected pages.",icon:"÷PDF",run:renderSplitPdf},
+{route:"/pdf-text",cat:"PDF",name:"PDF → Text",desc:"Extract selectable PDF text in your browser.",icon:"TXT",run:renderPdfText},
+{route:"/pdf-to-word",cat:"Document",name:"PDF → Word",desc:"Extract PDF text into a DOCX document where possible.",icon:"DOC",run:renderPdfToWord},
+{route:"/file-info",cat:"Utilities",name:"File analyzer",desc:"Inspect name, type, size and image dimensions.",icon:"INFO",run:renderFileInfo},
+{route:"/zip-files",cat:"Archive",name:"Create ZIP",desc:"Bundle multiple files into a downloadable ZIP.",icon:"ZIP",run:renderZip},
+{route:"/text-tools",cat:"Document",name:"Text counters",desc:"Count words, characters and lines instantly.",icon:"123",run:renderTextTools},
+{route:"/pdf-to-excel",cat:"Document",name:"PDF → Excel",desc:"Table extraction needs a server-side PDF parser for reliable results.",icon:"XLS",unsupported:true,run:renderUnsupported},
+{route:"/word-to-pdf",cat:"Document",name:"Word → PDF",desc:"High-fidelity DOCX rendering needs server-side Office/LibreOffice processing.",icon:"W→P",unsupported:true,run:renderUnsupported},
+{route:"/pdf-to-powerpoint",cat:"Document",name:"PDF → PowerPoint",desc:"Editable PPTX conversion needs a document conversion backend.",icon:"PPT",unsupported:true,run:renderUnsupported},
+{route:"/pdf-protect",cat:"PDF",name:"PDF Protect",desc:"Encryption/password writing is not provided by the browser-only PDF library.",icon:"LOCK",unsupported:true,run:renderUnsupported}
+];
+const byRoute=Object.fromEntries(tools.map(t=>[t.route,t]));
 
-  const gaugeWrap = document.getElementById('gaugeWrap');
-  const gaugeFill = document.getElementById('gaugeFill');
-  const gaugeNow = document.getElementById('gaugeNow');
-  const gaugeStatus = document.getElementById('gaugeStatus');
-  const gaugeTargetLine = document.getElementById('gaugeTargetLine');
-  const warnBanner = document.getElementById('warnBanner');
-  const warnText = document.getElementById('warnText');
+function go(route){history.pushState({}, "",route);renderRoute()}
+window.addEventListener("popstate",renderRoute);
+document.addEventListener("click",e=>{const a=e.target.closest("[data-route]");if(a){e.preventDefault();go(a.dataset.route)}});
 
-  const resultsCard = document.getElementById('resultsCard');
-  const origImg = document.getElementById('origImg');
-  const compImg = document.getElementById('compImg');
-  const origSize = document.getElementById('origSize');
-  const compSize = document.getElementById('compSize');
-  const origDims = document.getElementById('origDims');
-  const compDims = document.getElementById('compDims');
-  const reductionPct = document.getElementById('reductionPct');
-  const statReduction = document.getElementById('statReduction');
-  const statQuality = document.getElementById('statQuality');
-  const statScale = document.getElementById('statScale');
-  const downloadBtn = document.getElementById('downloadBtn');
-  const resetBtn = document.getElementById('resetBtn');
+function renderHome(){
+ $("#home").classList.add("active");$("#toolPage").classList.remove("active");
+ const grid=$("#toolGrid");const cats=["All","Image","PDF","Compression","Document","Archive","Utilities"];grid.innerHTML=tools.slice(0,20).map(t=>`<a href="${t.route}" data-route="${t.route}" class="tool" data-cat="${t.cat}"><div class="ico">${esc(t.icon)}</div><h3>${esc(t.name)}</h3><p>${esc(t.desc)}</p><span class="tag">${t.unsupported?"BACKEND REQUIRED":"LOCAL TOOL"}</span></a>`).join("");
+ let active="All";
+ const head=grid.parentElement;
+ const chips=document.createElement("div");chips.className="categories";chips.innerHTML=cats.map(c=>`<button class="chip ${c==="All"?"active":""}" data-catbtn="${c}">${c}</button>`).join("");
+ head.insertBefore(chips,grid);
+ chips.onclick=e=>{const b=e.target.closest("[data-catbtn]");if(!b)return;active=b.dataset.catbtn;$$("[data-catbtn]").forEach(x=>x.classList.toggle("active",x===b));$$(".tool").forEach(x=>x.style.display=active==="All"||x.dataset.cat===active?"":"none")};
+ setupSearch();
+}
+function setupSearch(){const inp=$("#toolSearch"),box=$("#searchResults");if(!inp)return;inp.oninput=()=>{const q=inp.value.trim().toLowerCase();if(!q){box.classList.remove("show");return}const r=tools.filter(t=>(t.name+" "+t.desc+" "+t.cat).toLowerCase().includes(q)).slice(0,7);box.innerHTML=r.map(t=>`<a href="${t.route}" data-route="${t.route}" class="searchresult"><span>${esc(t.name)}</span><small>${esc(t.cat)}</small></a>`).join("")||`<div class="empty">No matching tools.</div>`;box.classList.add("show")};document.addEventListener("click",e=>{if(!e.target.closest(".searchwrap"))box.classList.remove("show")},{once:false})}
+function renderRoute(){const path=location.pathname.replace(/\/+$/,"")||"/";if(path==="/"){renderHome();return}const t=byRoute[path]||byRoute["/compress"];$("#home").classList.remove("active");$("#toolPage").classList.add("active");$("#toolTitle").textContent=t.name;$("#toolDesc").textContent=t.desc;$("#sideNav").innerHTML=`<h3>Tools</h3>`+tools.slice(0,20).map(x=>`<button class="${x.route===t.route?"active":""}" data-route="${x.route}">${esc(x.name)}</button>`).join("");$("#toolContent").innerHTML="";t.run();window.scrollTo({top:0,behavior:"smooth"})}
 
-  let currentUnit = 'KB';
-  let sourceFile = null;
-  let sourceImageEl = null; // decoded HTMLImageElement
-  let sourceDataUrl = null;
-  let compressedBlob = null;
-  let compressedUrl = null;
-  let maxWorkingDim = 0; // natural largest dimension
+function renderCompressor(){
+ const c=$("#toolContent");c.innerHTML=`${uploadHTML("compressDrop",".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp",false,"Drop an image here")}<div id="compressFiles" class="filelist"></div>
+ <div class="card"><div class="controls"><div class="field"><label>Maximum file size</label><input id="target" type="number" min="1" value="500"></div><div class="field"><label>Unit</label><select id="unit"><option>KB</option><option>MB</option></select></div><div class="field"><label>Presets</label><select id="preset"><option value="">Custom</option><option value="100|KB">100 KB</option><option value="500|KB">500 KB</option><option value="1|MB">1 MB</option><option value="2|MB">2 MB</option><option value="5|MB">5 MB</option></select></div></div><div class="actions"><button id="compressRun" class="btn primary" disabled>Compress image</button><button id="compressClear" class="btn ghost">Start over</button></div><div id="compressStatus" class="status"></div><div class="progress"><i></i></div></div><div id="compressResult"></div>`;
+ let files=[];makeDrop("compressDrop",".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp",true,fs=>{files=fs;$("#compressFiles").innerHTML=files.map(fileRow).join("");$("#compressRun").disabled=!files.length});
+ $("#preset").onchange=e=>{if(!e.target.value)return;const [v,u]=e.target.value.split("|");$("#target").value=v;$("#unit").value=u};
+ $("#compressClear").onclick=()=>{files=[];$("#compressFiles").innerHTML="";$("#compressRun").disabled=true;$("#compressResult").innerHTML="";setStatus("compressStatus","",0)};
+ $("#compressRun").onclick=async()=>{if(!files.length)return;const target=(+$("#target").value||0)*($("#unit").value==="MB"?1048576:1024);if(target<=0)return toast("Enter a valid target size.");$("#compressRun").disabled=true;const outs=[];try{for(let i=0;i<files.length;i++){setStatus("compressStatus",`Compressing ${i+1} of ${files.length}…`,(i/files.length)*100);const r=await compressImageTarget(files[i],target,p=>setStatus("compressStatus",`File ${i+1}/${files.length}: ${p.text}`,(i+p.p/100)/files.length*100));outs.push({source:files[i],...r,name:baseName(files[i].name)+"-compressed."+mimeExt(r.blob.type)});await sleep(10)}$("#compressResult").innerHTML=outs.map((r,i)=>compressResultHTML(r.source,r,i)).join("")+`<div class="actions"><button class="btn primary" id="compressZip">Download all as ZIP</button></div>`;outs.forEach((r,i)=>$("#compressResult").querySelector(`[data-cd="${i}"]`).onclick=()=>download(r.blob,r.name));$("#compressZip").onclick=async()=>{const z=new JSZip();outs.forEach(r=>z.file(r.name,r.blob));download(await z.generateAsync({type:"blob"}),"forge-compressed.zip")};setStatus("compressStatus",`Completed ${outs.length} file${outs.length>1?"s":""}`,100)}catch(e){$("#compressResult").innerHTML=errorHTML(e.message)}finally{$("#compressRun").disabled=false}};
+}
+function fileRow(f){return `<div class="fileitem"><div class="thumb" style="display:grid;place-items:center">IMG</div><div><strong>${esc(f.name)}</strong><small>${fmt(f.size)} · ${esc(f.type||"unknown")}</small></div></div>`}
+function mimeExt(m){return m==="image/png"?"png":m==="image/webp"?"webp":"jpg"}
+function loadImage(file){return new Promise((res,rej)=>{const u=URL.createObjectURL(file),img=new Image();img.onload=()=>{URL.revokeObjectURL(u);res(img)};img.onerror=()=>{URL.revokeObjectURL(u);rej(new Error("The image could not be decoded."))};img.src=u})}
+function canvasBlob(canvas,mime,q){return new Promise((res,rej)=>canvas.toBlob(b=>b?res(b):rej(new Error("Your browser could not encode this image.")),mime,q))}
+async function hasAlpha(img){const c=document.createElement("canvas");c.width=c.height=64;const x=c.getContext("2d");x.drawImage(img,0,0,64,64);const d=x.getImageData(0,0,64,64).data;for(let i=3;i<d.length;i+=4)if(d[i]<255)return true;return false}
+async function compressImageTarget(file,target,cb){const img=await loadImage(file);const alpha=await hasAlpha(img),mime=alpha&&file.type!=="image/jpeg"?(file.type==="image/webp"?"image/webp":"image/png"):(file.type==="image/webp"?"image/webp":"image/jpeg");const scales=[1,.85,.7,.55,.4,.3,.22,.16,.11,.08];let best=null,bq=null,bs=1,hit=false;
+for(let si=0;si<scales.length;si++){const s=scales[si],w=Math.max(1,Math.round(img.naturalWidth*s)),h=Math.max(1,Math.round(img.naturalHeight*s)),c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d").drawImage(img,0,0,w,h);if(mime==="image/png"){const b=await canvasBlob(c,mime);cb({p:Math.round((si+1)/scales.length*100),text:`Trying ${w}×${h} PNG…`});if(!best||b.size<best.size){best=b;bs=s}if(b.size<=target){hit=true;break}continue}
+let lo=.05,hi=.95,local=null,lq=.05;for(let i=0;i<7;i++){const q=(lo+hi)/2,b=await canvasBlob(c,mime,q);cb({p:Math.min(98,Math.round((si/scales.length)*100+(i/7)*(100/scales.length))),text:`Trying ${w}×${h} · quality ${Math.round(q*100)}%…`});if(b.size<=target){local=b;lq=q;lo=q}else hi=q}
+if(!local){const b=await canvasBlob(c,mime,.05);if(b.size<=target){local=b;lq=.05}else if(!best||b.size<best.size){best=b;bs=s;bq=.05}}
+if(local){best=local;bs=s;bq=lq;hit=true;break}}
+if(!best){const c=document.createElement("canvas");c.width=Math.max(1,Math.round(img.naturalWidth*.08));c.height=Math.max(1,Math.round(img.naturalHeight*.08));best=await canvasBlob(c,mime,.05);bs=.08;bq=.05}
+return {blob:best,scale:bs,quality:bq,hit:best.size<=target,w:Math.round(img.naturalWidth*bs),h:Math.round(img.naturalHeight*bs)}}
+function compressResultHTML(f,r,i){const red=Math.max(0,(1-r.blob.size/f.size)*100);const u=URL.createObjectURL(r.blob);return `<div class="card"><div class="toolbar"><div><strong>${esc(f.name)}</strong><div class="muted">${r.hit?"Target reached":"Best possible result"} · ${fmt(r.blob.size)}</div></div><button class="btn primary" data-cd="${i}">Download</button></div><div class="resultgrid"><div class="previewbox"><small class="muted">Original · ${fmt(f.size)}</small><img src="${URL.createObjectURL(f)}" alt=""></div><div class="previewbox"><small class="muted">Compressed · ${fmt(r.blob.size)}</small><img src="${u}" alt=""></div></div><div class="stats"><div class="stat"><b>${red.toFixed(0)}%</b><span>Reduction</span></div><div class="stat"><b>${r.quality==null?"—":Math.round(r.quality*100)+"%"}</b><span>Quality</span></div><div class="stat"><b>${Math.round(r.scale*100)}%</b><span>Scale</span></div></div></div>`}
 
-  function bytesToReadable(b){
-    if(b >= 1024*1024) return (b/(1024*1024)).toFixed(2) + ' MB';
-    return (b/1024).toFixed(1) + ' KB';
-  }
+function renderImageConverter(out,title){imageTool(out,title,false)}
+function imageTool(out,title,resizer){const c=$("#toolContent");c.innerHTML=`${uploadHTML("imageDrop","image/*",true,"Drop images here")}<div id="imageFiles" class="filelist"></div><div class="card"><div class="controls"><div class="field"><label>Quality</label><input id="imgQ" type="range" min="10" max="100" value="88"><span id="imgQV" class="muted">88%</span></div><div class="field"><label>Width (optional)</label><input id="imgW" type="number" min="1" placeholder="Original"></div><div class="field"><label>Height (optional)</label><input id="imgH" type="number" min="1" placeholder="Original"></div></div><div class="check" style="margin-top:12px"><input id="keepAR" type="checkbox" checked> Keep aspect ratio</div><div class="field" style="margin-top:12px"><label>Background for transparent → JPG</label><input id="bg" type="color" value="#ffffff"></div><div class="actions"><button id="imgRun" class="btn primary" disabled>Convert files</button><button id="imgZip" class="btn ghost" disabled>Download all ZIP</button></div><div id="imgStatus" class="status"></div><div class="progress"><i></i></div></div><div id="imgResults"></div>`;
+let files=[];makeDrop("imageDrop","image/*",true,fs=>{files=fs;$("#imageFiles").innerHTML=files.map(fileRow).join("");$("#imgRun").disabled=!files.length});
+$("#imgQ").oninput=e=>$("#imgQV").textContent=e.target.value+"%";
+$("#imgRun").onclick=async()=>{if(!files.length)return;$("#imgRun").disabled=true;const outputs=[];for(let i=0;i<files.length;i++){try{const b=await transformImage(files[i],out,+$("#imgQ").value/100,+$("#imgW").value||null,+$("#imgH").value||null,$("#keepAR").checked,$("#bg").value);outputs.push({blob:b,name:baseName(files[i].name)+"."+mimeExt(out==="jpeg"?"image/jpeg":"image/"+out)});setStatus("imgStatus",`Processed ${i+1} of ${files.length}`,((i+1)/files.length)*100)}catch(e){toast(files[i].name+": "+e.message)}}window.__imgOutputs=outputs;$("#imgResults").innerHTML=outputs.map((o,i)=>`<div class="fileitem"><div class="thumb" style="display:grid;place-items:center">OK</div><div><strong>${esc(o.name)}</strong><small>${fmt(o.blob.size)}</small></div><button class="btn ghost" data-imgdl="${i}">Download</button></div>`).join("");$$("[data-imgdl]").forEach(b=>b.onclick=()=>download(outputs[+b.dataset.imgdl].blob,outputs[+b.dataset.imgdl].name));$("#imgZip").disabled=outputs.length<2;$("#imgZip").onclick=async()=>{const z=new JSZip();outputs.forEach(o=>z.file(o.name,o.blob));download(await z.generateAsync({type:"blob"}),"forge-converted.zip")};$("#imgRun").disabled=false};
+}
+async function transformImage(file,out,q,W,H,keep,bg){const img=await loadImage(file);let w=W||img.naturalWidth,h=H||img.naturalHeight;if(keep){if(W&&!H)h=Math.round(img.naturalHeight*(W/img.naturalWidth));else if(H&&!W)w=Math.round(img.naturalWidth*(H/img.naturalHeight));else if(W&&H){const s=Math.min(W/img.naturalWidth,H/img.naturalHeight);w=Math.round(img.naturalWidth*s);h=Math.round(img.naturalHeight*s)}}const c=document.createElement("canvas");c.width=w;c.height=h;const x=c.getContext("2d");if(out==="jpeg"){x.fillStyle=bg;x.fillRect(0,0,w,h)}x.imageSmoothingQuality="high";x.drawImage(img,0,0,w,h);return canvasBlob(c,"image/"+out,q)}
+function renderResizer(){const c=$("#toolContent");c.innerHTML=`${uploadHTML("resizeDrop","image/*",true,"Drop images here")}<div id="resizeFiles" class="filelist"></div><div class="card"><div class="controls"><div class="field"><label>Width</label><input id="rzW" type="number" min="1" placeholder="Original"></div><div class="field"><label>Height</label><input id="rzH" type="number" min="1" placeholder="Original"></div><div class="field"><label>Percentage</label><select id="rzPct"><option value="1">100%</option><option value=".75">75%</option><option value=".5">50%</option><option value=".25">25%</option></select></div></div><div class="check" style="margin-top:12px"><input id="rzAR" type="checkbox" checked> Keep aspect ratio</div><div class="actions"><button id="rzRun" class="btn primary" disabled>Resize images</button></div><div id="rzResults"></div></div>`;let fs=[];makeDrop("resizeDrop","image/*",true,x=>{fs=x;$("#resizeFiles").innerHTML=x.map(fileRow).join("");$("#rzRun").disabled=false});$("#rzRun").onclick=async()=>{const outs=[];for(let i=0;i<fs.length;i++){const f=fs[i],img=await loadImage(f);let w=+$("#rzW").value||0,h=+$("#rzH").value||0,s=+$("#rzPct").value;if(!w&&!h){w=Math.round(img.naturalWidth*s);h=Math.round(img.naturalHeight*s)}else if($("#rzAR").checked){if(w&&!h)h=Math.round(img.naturalHeight*w/img.naturalWidth);else if(h&&!w)w=Math.round(img.naturalWidth*h/img.naturalHeight);else if(w&&h){const q=Math.min(w/img.naturalWidth,h/img.naturalHeight);w=Math.round(img.naturalWidth*q);h=Math.round(img.naturalHeight*q)}}else{w=w||img.naturalWidth;h=h||img.naturalHeight}const mime=["image/jpeg","image/png","image/webp"].includes(f.type)?f.type:"image/png",cc=document.createElement("canvas");cc.width=w;cc.height=h;cc.getContext("2d").drawImage(img,0,0,w,h);const b=await canvasBlob(cc,mime,.9);outs.push({blob:b,name:baseName(f.name)+"-resized."+mimeExt(mime)})}$("#rzResults").innerHTML=outs.map((o,i)=>`<div class="fileitem"><div>IMG</div><div><strong>${esc(o.name)}</strong><small>${fmt(o.blob.size)}</small></div><button class="btn ghost" data-rz="${i}">Download</button></div>`).join("");outs.forEach((o,i)=>$(`[data-rz="${i}"]`).onclick=()=>download(o.blob,o.name))} }
+function renderRotator(){const c=$("#toolContent");c.innerHTML=`${uploadHTML("rotDrop","image/*",true,"Drop images here")}<div id="rotFiles" class="filelist"></div><div class="card"><div class="controls"><div class="field"><label>Rotation</label><select id="rot"><option value="90">90° clockwise</option><option value="-90">90° counterclockwise</option><option value="180">180°</option></select></div><div class="check"><input id="fh" type="checkbox"> Flip horizontal</div><div class="check"><input id="fv" type="checkbox"> Flip vertical</div></div><div class="actions"><button id="rotRun" class="btn primary" disabled>Process images</button></div><div id="rotResults"></div></div>`;let files=[];makeDrop("rotDrop","image/*",true,fs=>{files=fs;$("#rotFiles").innerHTML=fs.map(fileRow).join("");$("#rotRun").disabled=false});$("#rotRun").onclick=async()=>{const outs=[];for(let i=0;i<files.length;i++){const img=await loadImage(files[i]),a=(+$("#rot").value)*Math.PI/180,swap=Math.abs(+$("#rot").value)===90,c=document.createElement("canvas");c.width=swap?img.naturalHeight:img.naturalWidth;c.height=swap?img.naturalWidth:img.naturalHeight;const x=c.getContext("2d");x.translate(c.width/2,c.height/2);x.rotate(a);x.scale($("#fh").checked?-1:1,$("#fv").checked?-1:1);x.drawImage(img,-img.naturalWidth/2,-img.naturalHeight/2);const b=await canvasBlob(c,"image/png");outs.push({blob:b,name:baseName(files[i].name)+"-rotated.png"})}window.__rotOut=outs;$("#rotResults").innerHTML=outs.map((o,i)=>`<div class="fileitem"><div>IMG</div><div><strong>${esc(o.name)}</strong><small>${fmt(o.blob.size)}</small></div><button class="btn ghost" data-rd="${i}">Download</button></div>`).join("");$$("[data-rd]").forEach(b=>b.onclick=()=>download(outs[+b.dataset.rd].blob,outs[+b.dataset.rd].name))}}
 
-  function targetBytes(){
-    const v = parseFloat(targetValue.value) || 0;
-    return currentUnit === 'MB' ? v * 1024 * 1024 : v * 1024;
-  }
+function renderImagesToPdf(title,accept){const c=$("#toolContent");c.innerHTML=`${uploadHTML("ipdfDrop",accept,true,"Drop images here")}<div id="ipdfFiles" class="filelist"></div><div class="card"><div class="controls"><div class="field"><label>Page size</label><select id="pageSize"><option value="A4">A4</option><option value="LETTER">Letter</option><option value="image">Fit image</option></select></div><div class="field"><label>Orientation</label><select id="orientation"><option>Portrait</option><option>Landscape</option></select></div><div class="field"><label>Margin (pt)</label><input id="margin" type="number" value="24" min="0"></div></div><div class="actions"><button id="ipdfRun" class="btn primary" disabled>Create PDF</button></div><div id="ipdfStatus" class="status"></div><div class="progress"><i></i></div></div>`;let files=[];makeDrop("ipdfDrop",accept,true,fs=>{files=fs;$("#ipdfFiles").innerHTML=fs.map((f,i)=>`<div class="fileitem" draggable="true" data-i="${i}"><div class="thumb" style="display:grid;place-items:center">IMG</div><div><strong>${esc(f.name)}</strong><small>${fmt(f.size)}</small></div><span class="muted">↕</span></div>`).join("");$("#ipdfRun").disabled=!files.length});$("#ipdfRun").onclick=async()=>{try{const pdf=await PDFLib.PDFDocument.create();const margin=Math.max(0,+$("#margin").value||0),ps=$("#pageSize").value,ori=$("#orientation").value;for(let i=0;i<files.length;i++){const img=await loadImage(files[i]);let w,h;if(ps==="A4"){w=595.28;h=841.89}else if(ps==="LETTER"){w=612;h=792}else{w=img.naturalWidth;h=img.naturalHeight}if(ori==="Landscape"&&ps!=="image")[w,h]=[h,w];const page=pdf.addPage([w,h]);const s=Math.min((w-2*margin)/img.naturalWidth,(h-2*margin)/img.naturalHeight);const iw=img.naturalWidth*s,ih=img.naturalHeight*s;const cc=document.createElement("canvas");cc.width=img.naturalWidth;cc.height=img.naturalHeight;cc.getContext("2d").drawImage(img,0,0);const data=await new Promise(r=>cc.toBlob(b=>b.arrayBuffer().then(r),"image/jpeg",.92));const emb=await pdf.embedJpg(data);page.drawImage(emb,{x:(w-iw)/2,y:(h-ih)/2,width:iw,height:ih});setStatus("ipdfStatus",`Added ${i+1} of ${files.length}`,((i+1)/files.length)*100)}download(new Blob([await pdf.save()],{type:"application/pdf"}),baseName(files[0].name)+"-images.pdf")}catch(e){toast(e.message)}}}
 
-  // ---- Unit toggle ----
-  unitBtns.forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      unitBtns.forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      currentUnit = btn.dataset.unit;
-      presetChips.forEach(c=>c.classList.remove('active'));
-    });
-  });
+async function pdfBytes(file){if(file.type!=="application/pdf"&&ext(file.name)!=="pdf")throw new Error("Please choose a PDF file.");return new Uint8Array(await file.arrayBuffer())}
+async function loadPdf(file){return PDFLib.PDFDocument.load(await pdfBytes(file),{ignoreEncryption:false})}
+function renderMergePdf(){const c=$("#toolContent");c.innerHTML=`${uploadHTML("mergeDrop","application/pdf,.pdf",true,"Drop PDF files here")}<div id="mergeFiles" class="filelist"></div><div class="card"><div class="actions"><button id="mergeRun" class="btn primary" disabled>Merge PDFs</button></div><div id="mergeStatus" class="status"></div></div>`;let fs=[];makeDrop("mergeDrop","application/pdf,.pdf",true,x=>{fs=x;$("#mergeFiles").innerHTML=fs.map(fileRow).join("");$("#mergeRun").disabled=!fs.length});$("#mergeRun").onclick=async()=>{try{const out=await PDFLib.PDFDocument.create();for(let i=0;i<fs.length;i++){const src=await loadPdf(fs[i]);const pages=await out.copyPages(src,src.getPageIndices());pages.forEach(p=>out.addPage(p));setStatus("mergeStatus",`Merged ${i+1} of ${fs.length}`,((i+1)/fs.length)*100)}download(new Blob([await out.save()],{type:"application/pdf"}),"merged.pdf")}catch(e){toast("Merge failed: "+e.message)}}}
+function renderSplitPdf(){const c=$("#toolContent");c.innerHTML=`${uploadHTML("splitDrop","application/pdf,.pdf",false,"Drop a PDF here")}<div id="splitFile"></div><div class="card"><div class="controls"><div class="field"><label>Pages</label><input id="pages" placeholder="e.g. 1-3, 5, 8-10"></div><div class="field"><label>Mode</label><select id="splitMode"><option value="selected">Selected pages → one PDF</option><option value="each">Every page → separate PDF</option></select></div></div><div class="actions"><button id="splitRun" class="btn primary" disabled>Split PDF</button></div><div id="splitStatus" class="status"></div></div>`;let f=null;makeDrop("splitDrop","application/pdf,.pdf",false,x=>{f=x[0];$("#splitFile").innerHTML=fileRow(f);$("#splitRun").disabled=false});$("#splitRun").onclick=async()=>{try{const src=await loadPdf(f),n=src.getPageCount();if($("#splitMode").value==="each"){const z=new JSZip();for(let i=0;i<n;i++){const p=await PDFLib.PDFDocument.create(),[pg]=await p.copyPages(src,[i]);p.addPage(pg);z.file(`page-${i+1}.pdf`,await p.save());setStatus("splitStatus",`Exported page ${i+1} of ${n}`,((i+1)/n)*100)}download(await z.generateAsync({type:"blob"}),baseName(f.name)+"-pages.zip")}else{const ids=parsePages($("#pages").value,n);if(!ids.length)throw new Error("Enter at least one valid page.");const p=await PDFLib.PDFDocument.create();(await p.copyPages(src,ids.map(x=>x-1))).forEach(x=>p.addPage(x));download(new Blob([await p.save()],{type:"application/pdf"}),baseName(f.name)+"-split.pdf")}}catch(e){toast("Split failed: "+e.message)}}}
+function parsePages(s,max){const out=new Set();for(const part of s.split(",")){const x=part.trim();if(!x)continue;if(/^\\d+$/.test(x)){const n=+x;if(n>=1&&n<=max)out.add(n)}else{const m=x.match(/^(\\d+)\\s*-\\s*(\\d+)$/);if(m){let a=+m[1],b=+m[2];if(a>b)[a,b]=[b,a];for(let i=a;i<=b&&i<=max;i++)if(i>=1)out.add(i)}}}return [...out].sort((a,b)=>a-b)}
 
-  // ---- Presets ----
-  presetChips.forEach(chip=>{
-    chip.addEventListener('click', ()=>{
-      presetChips.forEach(c=>c.classList.remove('active'));
-      chip.classList.add('active');
-      targetValue.value = chip.dataset.val;
-      const u = chip.dataset.unit;
-      unitBtns.forEach(b=>{
-        b.classList.toggle('active', b.dataset.unit === u);
-      });
-      currentUnit = u;
-    });
-  });
-  targetValue.addEventListener('input', ()=>{
-    presetChips.forEach(c=>c.classList.remove('active'));
-  });
+async function getPdfJs(){if(window.pdfjsLib)return window.pdfjsLib;const m=await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs");m.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";window.pdfjsLib=m;return m}
+async function renderPdfToImages(title,mime){const c=$("#toolContent");c.innerHTML=`${uploadHTML("p2iDrop","application/pdf,.pdf",false,"Drop a PDF here")}<div id="p2iFile"></div><div class="card"><div class="controls"><div class="field"><label>Scale</label><select id="pdfScale"><option value="1">1×</option><option value="1.5" selected>1.5×</option><option value="2">2×</option></select></div></div><div class="actions"><button id="p2iRun" class="btn primary" disabled>Render pages</button></div><div id="p2iStatus" class="status"></div><div class="progress"><i></i></div></div><div id="p2iResults"></div>`;let f=null;makeDrop("p2iDrop","application/pdf,.pdf",false,x=>{f=x[0];$("#p2iFile").innerHTML=fileRow(f);$("#p2iRun").disabled=false});$("#p2iRun").onclick=async()=>{try{const pdfjs=await getPdfJs(),pdf=await pdfjs.getDocument({data:await pdfBytes(f)}).promise,outs=[];for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i),v=page.getViewport({scale:+$("#pdfScale").value}),canvas=document.createElement("canvas");canvas.width=Math.ceil(v.width);canvas.height=Math.ceil(v.height);await page.render({canvasContext:canvas.getContext("2d"),viewport:v}).promise;const b=await new Promise(r=>canvas.toBlob(r,mime,.92));outs.push({blob:b,name:`${baseName(f.name)}-page-${i}.${mime==="image/png"?"png":"jpg"}`});setStatus("p2iStatus",`Rendered ${i} of ${pdf.numPages}`,i/pdf.numPages*100)}window.__p2i=outs;const z=outs.length>1?await zipOutputs(outs):null;$("#p2iResults").innerHTML=outs.map((o,i)=>`<div class="fileitem"><div>IMG</div><div><strong>${esc(o.name)}</strong><small>${fmt(o.blob.size)}</small></div><button class="btn ghost" data-p2id="${i}">Download</button></div>`).join("")+(z?`<div class="actions"><button id="p2izip" class="btn primary">Download all ZIP</button></div>`:"");$$("[data-p2id]").forEach(b=>b.onclick=()=>download(outs[+b.dataset.p2id].blob,outs[+b.dataset.p2id].name));$("#p2izip")?.addEventListener("click",()=>download(z,baseName(f.name)+"-images.zip"))}catch(e){toast("PDF render failed: "+e.message)}}}
+async function zipOutputs(outs){const z=new JSZip();outs.forEach(o=>z.file(o.name,o.blob));return z.generateAsync({type:"blob"})}
 
-  // ---- Upload interactions ----
-  chooseBtn.addEventListener('click', (e)=>{ e.stopPropagation(); fileInput.click(); });
-  dropzone.addEventListener('click', (e)=>{
-    if(!dropzone.classList.contains('has-image')) fileInput.click();
-  });
-  fileInput.addEventListener('change', (e)=>{
-    if(e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
-  });
+async function renderPdfText(){const c=$("#toolContent");c.innerHTML=`${uploadHTML("txtPdfDrop","application/pdf,.pdf",false,"Drop a PDF here")}<div id="txtPdfFile"></div><div class="card"><div class="actions"><button id="txtRun" class="btn primary" disabled>Extract text</button><button id="txtDocx" class="btn ghost" disabled>Export DOCX</button></div><div id="txtStatus" class="status"></div><textarea id="pdfTextOut" rows="18" style="margin-top:12px;resize:vertical" placeholder="Extracted text will appear here…"></textarea></div>`;let f=null,text="";makeDrop("txtPdfDrop","application/pdf,.pdf",false,x=>{f=x[0];$("#txtPdfFile").innerHTML=fileRow(f);$("#txtRun").disabled=false});$("#txtRun").onclick=async()=>{try{const pdfjs=await getPdfJs(),pdf=await pdfjs.getDocument({data:await pdfBytes(f)}).promise,parts=[];for(let i=1;i<=pdf.numPages;i++){const p=await pdf.getPage(i),c=await p.getTextContent();parts.push(c.items.map(x=>x.str).join(" "));setStatus("txtStatus",`Read ${i} of ${pdf.numPages}`,i/pdf.numPages*100)}text=parts.join("\n\n--- Page break ---\n\n");$("#pdfTextOut").value=text;$("#txtDocx").disabled=!text.trim()}catch(e){toast("Text extraction failed: "+e.message)}};$("#txtDocx").onclick=()=>downloadDocx(text,baseName(f.name)+"-text.docx")}
+function downloadDocx(text,name){if(!window.docx)return toast("DOCX library unavailable.");const {Document,Packer,Paragraph}=window.docx;const doc=new Document({sections:[{children:text.split(/\n/).map(x=>new Paragraph({text:x}))}]});Packer.toBlob(doc).then(b=>download(b,name))}
+function renderPdfToWord(){renderPdfText();setTimeout(()=>{$("#toolTitle").textContent="PDF to Word";$("#toolDesc").textContent="Extracted PDF text is placed into a real DOCX; layout fidelity is not claimed."},0)}
+function renderUnsupported(){const t=byRoute[location.pathname]||{};$("#toolContent").innerHTML=`<div class="card unsupported"><div class="notice"><strong>This tool is intentionally not faked.</strong><br>${esc(t.desc||"This conversion needs a server-side document engine.")}<br><br>Use a backend based on LibreOffice, Poppler, Ghostscript or a dedicated document/PDF conversion service for production-quality results. The current project is frontend-only, so no server is being invented here.</div></div>`}
 
-  ['dragenter','dragover'].forEach(evt=>{
-    dropzone.addEventListener(evt, (e)=>{
-      e.preventDefault(); e.stopPropagation();
-      dropzone.classList.add('drag');
-    });
-  });
-  ['dragleave','drop'].forEach(evt=>{
-    dropzone.addEventListener(evt, (e)=>{
-      e.preventDefault(); e.stopPropagation();
-      dropzone.classList.remove('drag');
-    });
-  });
-  dropzone.addEventListener('drop', (e)=>{
-    const f = e.dataTransfer.files && e.dataTransfer.files[0];
-    if(f) handleFile(f);
-  });
+function renderFileInfo(){const c=$("#toolContent");c.innerHTML=`${uploadHTML("infoDrop","*/*",true,"Drop files here")}<div id="infoResults"></div>`;makeDrop("infoDrop","*/*",true,async fs=>{$("#infoResults").innerHTML=fs.map(f=>`<div class="card"><div class="fileitem"><div class="thumb" style="display:grid;place-items:center">FILE</div><div><strong>${esc(f.name)}</strong><small>${fmt(f.size)} · ${esc(f.type||"unknown")}</small></div></div><div class="stats"><div class="stat"><b>${esc(ext(f.name)||"—")}</b><span>Extension</span></div><div class="stat"><b>${esc(f.type||"—")}</b><span>MIME</span></div><div class="stat"><b>${f.lastModified?new Date(f.lastModified).toLocaleDateString():"—"}</b><span>Modified</span></div></div></div>`).join("")})}
+function renderZip(){const c=$("#toolContent");c.innerHTML=`${uploadHTML("zipDrop","*/*",true,"Drop files here")}<div id="zipFiles" class="filelist"></div><div class="card"><div class="actions"><button id="zipRun" class="btn primary" disabled>Create ZIP</button></div><div id="zipStatus" class="status"></div><div class="progress"><i></i></div></div>`;let fs=[];makeDrop("zipDrop","*/*",true,x=>{fs=x;$("#zipFiles").innerHTML=fs.map(fileRow).join("");$("#zipRun").disabled=!fs.length});$("#zipRun").onclick=async()=>{const z=new JSZip();for(let i=0;i<fs.length;i++){z.file(fs[i].name,fs[i]);setStatus("zipStatus",`Added ${i+1} of ${fs.length}`,i/fs.length*100)}download(await z.generateAsync({type:"blob"}),"forge-files.zip")}}
+function renderTextTools(){const c=$("#toolContent");c.innerHTML=`<div class="card"><div class="field"><label>Text</label><textarea id="counterText" rows="18" placeholder="Paste or type text…"></textarea></div><div class="stats"><div class="stat"><b id="words">0</b><span>Words</span></div><div class="stat"><b id="chars">0</b><span>Characters</span></div><div class="stat"><b id="lines">0</b><span>Lines</span></div></div></div>`;$("#counterText").oninput=e=>{const s=e.target.value;$("#words").textContent=s.trim()?s.trim().split(/\s+/).length:0;$("#chars").textContent=s.length;$("#lines").textContent=s? s.split(/\r?\n/).length:0}}
+function errorHTML(msg){return `<div class="card"><div class="notice"><strong>Could not process this file.</strong><br>${esc(msg)}</div></div>`}
 
-  clearBtn.addEventListener('click', (e)=>{
-    e.stopPropagation();
-    resetAll();
-  });
-
-  const VALID_TYPES = ['image/jpeg','image/png','image/webp'];
-
-  function handleFile(file){
-    if(!VALID_TYPES.includes(file.type)){
-      alert('Please upload a JPG, PNG, or WebP image.');
-      return;
-    }
-    sourceFile = file;
-    const reader = new FileReader();
-    reader.onload = (e)=>{
-      sourceDataUrl = e.target.result;
-      const img = new Image();
-      img.onload = ()=>{
-        sourceImageEl = img;
-        maxWorkingDim = Math.max(img.naturalWidth, img.naturalHeight);
-        thumbImg.src = sourceDataUrl;
-        fileNameEl.textContent = file.name;
-        fileInfoEl.textContent = `${bytesToReadable(file.size)} · ${img.naturalWidth}×${img.naturalHeight}`;
-        dzEmpty.style.display = 'none';
-        dzFilled.style.display = 'block';
-        dropzone.classList.add('has-image');
-        compressBtn.disabled = false;
-        hideResults();
-        hideGauge();
-      };
-      img.src = sourceDataUrl;
-    };
-    reader.readAsDataURL(file);
-  }
-
-  function resetAll(){
-    sourceFile = null;
-    sourceImageEl = null;
-    sourceDataUrl = null;
-    compressedBlob = null;
-    if(compressedUrl){ URL.revokeObjectURL(compressedUrl); compressedUrl = null; }
-    fileInput.value = '';
-    dzEmpty.style.display = 'block';
-    dzFilled.style.display = 'none';
-    dropzone.classList.remove('has-image');
-    compressBtn.disabled = true;
-    hideResults();
-    hideGauge();
-  }
-
-  function hideResults(){ resultsCard.classList.remove('show'); }
-  function hideGauge(){
-    gaugeWrap.classList.remove('show');
-    warnBanner.classList.remove('show');
-  }
-
-  // ---- Compression engine ----
-  compressBtn.addEventListener('click', runCompression);
-
-  function drawToCanvas(img, w, h){
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    // flatten transparency onto white for JPEG-style output consistency when needed
-    ctx.drawImage(img, 0, 0, w, h);
-    return canvas;
-  }
-
-  function canvasToBlob(canvas, mime, quality){
-    return new Promise(resolve=>{
-      canvas.toBlob(blob=>resolve(blob), mime, quality);
-    });
-  }
-
-  async function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
-
-  function updateGauge(currentBytes, targetB, statusText, ok){
-    gaugeWrap.classList.add('show');
-    const maxRef = Math.max(sourceFile.size, targetB, currentBytes) * 1.05;
-    const pct = Math.min(100, (currentBytes / maxRef) * 100);
-    const targetPct = Math.min(100, (targetB / maxRef) * 100);
-    gaugeFill.style.width = pct + '%';
-    gaugeFill.classList.toggle('ok', ok);
-    gaugeTargetLine.style.left = targetPct + '%';
-    gaugeNow.textContent = bytesToReadable(currentBytes);
-    gaugeStatus.innerHTML = (ok ? '' : '<span class="spinner"></span>') + '<span>'+statusText+'</span>';
-  }
-
-  async function runCompression(){
-    if(!sourceImageEl || !sourceFile) return;
-    const targetB = targetBytes();
-    if(targetB <= 0){
-      alert('Enter a target size greater than 0.');
-      return;
-    }
-
-    compressBtn.disabled = true;
-    compressBtn.textContent = 'Compressing…';
-    hideResults();
-    warnBanner.classList.remove('show');
-    updateGauge(sourceFile.size, targetB, 'Starting…', false);
-    await sleep(50);
-
-    const originalMime = sourceFile.type;
-    // Choose working mime: PNG source with no transparency need can go to JPEG for better ratio,
-    // but keep PNG lossless path if source is PNG and target is generous; otherwise prefer JPEG for photos.
-    const preferJPEG = true; // JPEG/WebP give real quality control; use JPEG as universal compressor unless PNG needed for transparency
-    const hasAlpha = await imageHasAlpha(sourceImageEl);
-    let outputMime = 'image/jpeg';
-    if(hasAlpha){
-      outputMime = (originalMime === 'image/webp') ? 'image/webp' : 'image/png';
-    } else if(originalMime === 'image/webp'){
-      outputMime = 'image/webp';
-    }
-
-    const naturalW = sourceImageEl.naturalWidth;
-    const naturalH = sourceImageEl.naturalHeight;
-
-    let bestBlob = null;
-    let bestScale = 1;
-    let bestQuality = null;
-    let achieved = false;
-
-    // Strategy:
-    // 1. Try quality-only compression at full scale (binary search over quality) for lossy formats.
-    // 2. If even lowest quality at full scale still exceeds target, progressively downscale dimensions
-    //    and repeat quality search at each scale until target is met or we hit a minimum size floor.
-    // For lossless PNG w/ alpha and no viable quality axis, downscale dimensions directly.
-
-    const scales = [1, 0.85, 0.7, 0.55, 0.4, 0.3, 0.22, 0.16, 0.11, 0.08];
-    const minDim = 64; // don't go below this on the longest edge
-
-    outer:
-    for(let si=0; si<scales.length; si++){
-      const scale = scales[si];
-      let w = Math.round(naturalW * scale);
-      let h = Math.round(naturalH * scale);
-      if(Math.max(w,h) < minDim){
-        // clamp to minDim on the longer edge
-        const ratio = minDim / Math.max(naturalW, naturalH);
-        w = Math.max(1, Math.round(naturalW * ratio));
-        h = Math.max(1, Math.round(naturalH * ratio));
-      }
-
-      const canvas = drawToCanvas(sourceImageEl, w, h);
-
-      if(outputMime === 'image/png'){
-        // PNG has no quality knob — size is what it is at this resolution.
-        const blob = await canvasToBlob(canvas, 'image/png');
-        updateGauge(blob.size, targetB, `Trying ${w}×${h} (PNG)…`, false);
-        await sleep(10);
-        if(blob.size <= targetB){
-          bestBlob = blob; bestScale = scale; bestQuality = null; achieved = true;
-          break outer;
-        }
-        // keep the smallest attempt so far as fallback
-        if(!bestBlob || blob.size < bestBlob.size){
-          bestBlob = blob; bestScale = scale; bestQuality = null;
-        }
-        continue;
-      }
-
-      // Lossy formats: binary search quality
-      let lo = 0.05, hi = 0.95;
-      let localBest = null;
-      let localBestQ = null;
-      for(let iter=0; iter<7; iter++){
-        const q = (lo + hi) / 2;
-        const blob = await canvasToBlob(canvas, outputMime, q);
-        updateGauge(blob.size, targetB, `Trying ${w}×${h} @ quality ${(q*100).toFixed(0)}%…`, false);
-        await sleep(6);
-        if(blob.size <= targetB){
-          localBest = blob; localBestQ = q;
-          lo = q; // can afford higher quality
-        } else {
-          hi = q; // need smaller
-        }
-      }
-      // also test the low bound explicitly in case binary search never found a hit
-      if(!localBest){
-        const blob = await canvasToBlob(canvas, outputMime, 0.05);
-        updateGauge(blob.size, targetB, `Trying ${w}×${h} @ quality 5%…`, false);
-        await sleep(6);
-        if(blob.size <= targetB){
-          localBest = blob; localBestQ = 0.05;
-        } else if(!bestBlob || blob.size < bestBlob.size){
-          bestBlob = blob; bestScale = scale; bestQuality = 0.05;
-        }
-      }
-
-      if(localBest){
-        bestBlob = localBest; bestScale = scale; bestQuality = localBestQ; achieved = true;
-        break outer;
-      }
-    }
-
-    if(!bestBlob){
-      // absolute fallback: smallest scale, lowest quality
-      const w = Math.max(1, Math.round(naturalW * 0.08));
-      const h = Math.max(1, Math.round(naturalH * 0.08));
-      const canvas = drawToCanvas(sourceImageEl, w, h);
-      bestBlob = await canvasToBlob(canvas, outputMime === 'image/png' ? 'image/png' : outputMime, 0.05);
-      bestScale = 0.08;
-      bestQuality = outputMime === 'image/png' ? null : 0.05;
-    }
-
-    achieved = bestBlob.size <= targetB;
-    updateGauge(bestBlob.size, targetB, achieved ? 'Target reached' : 'Best possible result', achieved);
-
-    if(!achieved){
-      warnText.textContent = `Couldn't quite reach ${bytesToReadable(targetB)} without destroying the image — this is the smallest, cleanest result we could produce at ${bytesToReadable(bestBlob.size)}.`;
-      warnBanner.classList.add('show');
-    }
-
-    // Render results
-    compressedBlob = bestBlob;
-    if(compressedUrl) URL.revokeObjectURL(compressedUrl);
-    compressedUrl = URL.createObjectURL(bestBlob);
-
-    const outW = Math.round(naturalW * bestScale);
-    const outH = Math.round(naturalH * bestScale);
-
-    origImg.src = sourceDataUrl;
-    compImg.src = compressedUrl;
-    origSize.textContent = bytesToReadable(sourceFile.size);
-    compSize.textContent = bytesToReadable(bestBlob.size);
-    origDims.textContent = `${naturalW} × ${naturalH}px`;
-    compDims.textContent = `${outW} × ${outH}px`;
-
-    const reduction = Math.max(0, (1 - bestBlob.size / sourceFile.size) * 100);
-    reductionPct.textContent = reduction.toFixed(0) + '%';
-    statReduction.textContent = reduction.toFixed(0) + '%';
-    statQuality.textContent = bestQuality === null ? '—' : Math.round(bestQuality*100) + '%';
-    statScale.textContent = bestScale >= 1 ? 'Original' : Math.round(bestScale*100) + '%';
-
-    resultsCard.classList.add('show');
-    resultsCard.scrollIntoView({behavior:'smooth', block:'nearest'});
-
-    compressBtn.disabled = false;
-    compressBtn.textContent = 'Compress Image';
-  }
-
-  function imageHasAlpha(img){
-    return new Promise(resolve=>{
-      try{
-        const c = document.createElement('canvas');
-        const sampleSize = 64;
-        c.width = sampleSize; c.height = sampleSize;
-        const ctx = c.getContext('2d');
-        ctx.drawImage(img, 0, 0, sampleSize, sampleSize);
-        const data = ctx.getImageData(0,0,sampleSize,sampleSize).data;
-        for(let i=3; i<data.length; i+=4){
-          if(data[i] < 255){ resolve(true); return; }
-        }
-        resolve(false);
-      }catch(e){
-        resolve(false);
-      }
-    });
-  }
-
-  downloadBtn.addEventListener('click', ()=>{
-    if(!compressedBlob) return;
-    const a = document.createElement('a');
-    const ext = compressedBlob.type === 'image/png' ? 'png' : (compressedBlob.type === 'image/webp' ? 'webp' : 'jpg');
-    const baseName = (sourceFile.name || 'image').replace(/\.[^.]+$/, '');
-    a.href = compressedUrl;
-    a.download = `${baseName}-compressed.${ext}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  });
-
-  resetBtn.addEventListener('click', resetAll);
-
+renderRoute();
 })();
 </script>
 </body>
